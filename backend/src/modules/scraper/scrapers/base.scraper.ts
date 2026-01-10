@@ -1,62 +1,24 @@
-import { PlaywrightCrawler, ProxyConfiguration } from 'crawlee';
 import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()
 export abstract class BaseScraper {
   protected readonly logger = new Logger(this.constructor.name);
-  protected crawler: PlaywrightCrawler;
 
   // Ethical scraping defaults
   protected readonly DEFAULT_DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '3000');
   protected readonly USER_AGENT = process.env.SCRAPE_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   protected readonly MAX_RETRIES = parseInt(process.env.SCRAPE_RETRY_COUNT || '3');
 
-  constructor() {
-    this.initializeCrawler();
-  }
-
-  protected initializeCrawler(): void {
-    this.crawler = new PlaywrightCrawler({
-      // Request handler will be set by child classes
-      requestHandler: async () => {},
-
-      // Ethical scraping configuration
-      maxRequestsPerCrawl: 50,
-      maxConcurrency: 1, // Be polite - one at a time
-      requestHandlerTimeoutSecs: 60,
-      
-      // Error handling
-      failedRequestHandler: async ({ request, error }) => {
-        let errorMsg = '';
-        if (error instanceof Error) {
-          errorMsg = error.message;
-        } else {
-          errorMsg = String(error);
-        }
-        this.logger.error(`Request ${request.url} failed: ${errorMsg}`);
-      },
-
-      // Browser configuration
-      launchContext: {
-        launchOptions: {
-          headless: true, // Set to false for debugging
-        },
-      },
-
-      // Session and retry logic
-      useSessionPool: true,
-      persistCookiesPerSession: true,
-      maxRequestRetries: this.MAX_RETRIES,
-      retryOnBlocked: true,
-    });
-  }
-
   protected async delay(ms: number = this.DEFAULT_DELAY_MS): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, ms));
   }
 
   protected extractSlugFromUrl(url: string): string {
-    return url.split('/').filter(Boolean).pop() || '';
+    // Remove protocol, domain, and query parameters
+    const cleanUrl = url.replace(/^https?:\/\/[^\/]+/, '').split('?')[0];
+    // Get last non-empty path segment
+    const segments = cleanUrl.split('/').filter(segment => segment.trim().length > 0);
+    return segments.length > 0 ? segments[segments.length - 1] : 'home';
   }
 
   protected normalizePrice(priceText: string): { amount: number; currency: string } {
@@ -84,7 +46,7 @@ export abstract class BaseScraper {
       reviews.push({
         text: match[2].trim(),
         author: match[3].trim(),
-        rating: null, // No star ratings available
+        rating: null,
       });
     }
     

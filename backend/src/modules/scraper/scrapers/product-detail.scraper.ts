@@ -55,13 +55,16 @@ export class ProductDetailScraper extends BaseScraper {
       related_products: [],
     };
 
+    // @ts-ignore - Type issues with Crawlee v3
     const crawler = new PlaywrightCrawler({
       maxRequestsPerCrawl: 50,
       maxConcurrency: 1,
       requestHandlerTimeoutSecs: 60,
       
+      // @ts-ignore
       failedRequestHandler: async ({ request, error }) => {
-        this.logger.error(`Request ${request.url} failed: ${(error as Error).message}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Request ${request.url} failed: ${errorMessage}`);
       },
       
       launchContext: {
@@ -75,6 +78,7 @@ export class ProductDetailScraper extends BaseScraper {
       maxRequestRetries: this.MAX_RETRIES,
       retryOnBlocked: true,
       
+      // @ts-ignore - Main handler
       requestHandler: async ({ page, request }) => {
         this.logger.log(`Scraping product detail: ${sourceId} from ${request.url}`);
         
@@ -91,8 +95,8 @@ export class ProductDetailScraper extends BaseScraper {
             // Extract reviews from description
             productData.reviews = this.extractReviewFromDescription(productData.description);
           }
-        } catch (error) {
-          this.logger.warn(`Failed to extract description: ${(error as Error).message}`);
+        } catch (error: any) {
+          this.logger.warn(`Failed to extract description: ${error.message}`);
         }
 
         // Extract additional information/specs
@@ -110,8 +114,8 @@ export class ProductDetailScraper extends BaseScraper {
               sku: await this.extractTableValue(page, this.SELECTORS.INFO_SKU),
             };
           }
-        } catch (error) {
-          this.logger.warn(`Failed to extract specs: ${(error as Error).message}`);
+        } catch (error: any) {
+          this.logger.warn(`Failed to extract specs: ${error.message}`);
         }
 
         // Extract related products
@@ -139,12 +143,12 @@ export class ProductDetailScraper extends BaseScraper {
                   price,
                 });
               }
-            } catch (error) {
+            } catch (error: any) {
               // Skip individual related product errors
             }
           }
-        } catch (error) {
-          this.logger.warn(`Failed to extract related products: ${(error as Error).message}`);
+        } catch (error: any) {
+          this.logger.warn(`Failed to extract related products: ${error.message}`);
         }
 
         this.logger.log(`Successfully scraped detail for: ${sourceId}`);
@@ -152,7 +156,12 @@ export class ProductDetailScraper extends BaseScraper {
       },
     });
 
-    await crawler.run([url]);
+    await crawler.run([{ 
+      url, 
+      uniqueKey: `product-detail-${sourceId}`,
+      label: 'product-detail',
+      userData: { sourceId }
+    }]);
     return productData;
   }
 
@@ -163,7 +172,7 @@ export class ProductDetailScraper extends BaseScraper {
         const text = await element.textContent();
         return text?.trim() || '';
       }
-    } catch (error) {
+    } catch (error: any) {
       // Return empty if element not found
     }
     return '';
