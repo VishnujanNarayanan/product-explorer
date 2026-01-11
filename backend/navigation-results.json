@@ -1,0 +1,1007 @@
+{
+  "navigation": [
+    {
+      "title": "Clearance",
+      "slug": "clearance",
+      "url": "https://www.worldofbooks.com/en-gb/pages/clearance",
+      "hasChildren": true
+    },
+    {
+      "title": "eGift Cards",
+      "slug": "Gift-cards",
+      "url": "https://www.worldofbooks.com/en-gb/pages/Gift-cards",
+      "hasChildren": false
+    },
+    {
+      "title": "Shop Now",
+      "slug": "fiction",
+      "url": "https://www.worldofbooks.com/en-gb/pages/fiction",
+      "hasChildren": false
+    },
+    {
+      "title": "By Category",
+      "slug": "en-gb#",
+      "url": "https://www.worldofbooks.com/en-gb#",
+      "hasChildren": false
+    },
+    {
+      "title": "All Fiction Books",
+      "slug": "fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Crime & Mystery",
+      "slug": "crime-and-mystery-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/crime-and-mystery-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Fantasy",
+      "slug": "fantasy-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/fantasy-fiction-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Modern Fiction",
+      "slug": "modern-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/modern-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Romance",
+      "slug": "romance-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/romance-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Adventure",
+      "slug": "adventure-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/adventure-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Thriller & Suspense",
+      "slug": "thriller-and-suspense-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/thriller-and-suspense-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Classic Fiction",
+      "slug": "classic-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/classic-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Erotic Fiction",
+      "slug": "erotic-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/erotic-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Fiction-Related Items",
+      "slug": "fiction-related-items-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/fiction-related-items-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Anthologies & Short Stories",
+      "slug": "fiction-special-features-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/fiction-special-features-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Graphic Novels",
+      "slug": "graphic-novels-and-comic-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/graphic-novels-and-comic-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Historical Fiction",
+      "slug": "historical-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/historical-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Horror & Ghost Stories",
+      "slug": "horror-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/horror-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Religious & Spiritual Fiction",
+      "slug": "religious-and-spiritual-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/religious-and-spiritual-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Sagas",
+      "slug": "sagas-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/sagas-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Science Fiction",
+      "slug": "science-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/science-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "New Fiction Books",
+      "slug": "new-fiction-books-uk",
+      "url": "https://www.worldofbooks.com/en-gb/collections/new-fiction-books-uk",
+      "hasChildren": true
+    },
+    {
+      "title": "Celebrate Black Authors",
+      "slug": "celebrating-black-authors",
+      "url": "https://www.worldofbooks.com/en-gb/pages/celebrating-black-authors",
+      "hasChildren": false
+    },
+    {
+      "title": "Booker Prize Winners",
+      "slug": "booker-prize",
+      "url": "https://www.worldofbooks.com/en-gb/pages/booker-prize",
+      "hasChildren": false
+    },
+    {
+      "title": "Fiction Books of the Month",
+      "slug": "fiction-books-of-the-month",
+      "url": "https://www.worldofbooks.com/en-gb/pages/fiction-books-of-the-month",
+      "hasChildren": true
+    },
+    {
+      "title": "Shop Now",
+      "slug": "non-fiction",
+      "url": "https://www.worldofbooks.com/en-gb/pages/non-fiction",
+      "hasChildren": false
+    },
+    {
+      "title": "All Non-Fiction Books",
+      "slug": "non-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/non-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Biography & True Stories",
+      "slug": "biography-and-true-story-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/biography-and-true-story-books",
+      "hasChildren": false
+    },
+    {
+      "title": "English Language Teaching",
+      "slug": "english-language-teaching-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/english-language-teaching-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Health & Personal Development",
+      "slug": "health-and-personal-development-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/health-and-personal-development-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Lifestyle, Cooking & Leisure",
+      "slug": "lifestyle-cooking-and-leisure-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/lifestyle-cooking-and-leisure-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Reference Books",
+      "slug": "reference-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/reference-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Arts Books",
+      "slug": "arts-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/arts-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Computing & I.T.",
+      "slug": "computing-and-it-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/computing-and-it-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Earth Sciences",
+      "slug": "earth-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/earth-sciences-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Economics & Finance",
+      "slug": "economics-and-finance-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/economics-and-finance-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Humanities Books",
+      "slug": "humanities-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/humanities-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Language",
+      "slug": "language-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/language-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Law",
+      "slug": "law-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/law-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Literature & Literary Studies",
+      "slug": "literature-and-literary-studies-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/literature-and-literary-studies-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Mathematics & Science",
+      "slug": "mathematics-and-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/mathematics-and-science-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Medicine",
+      "slug": "medical-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/medical-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Social Sciences",
+      "slug": "social-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/social-science-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Technology",
+      "slug": "technology-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/technology-books",
+      "hasChildren": false
+    },
+    {
+      "title": "New Non-Fiction Books",
+      "slug": "new-non-fiction-uk",
+      "url": "https://www.worldofbooks.com/en-gb/collections/new-non-fiction-uk",
+      "hasChildren": true
+    },
+    {
+      "title": "Health & Fitness",
+      "slug": "family-and-health-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/family-and-health-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Cookery & Recipe",
+      "slug": "cookbooks-and-recipe-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/cookbooks-and-recipe-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Non-Fiction Books of the Month",
+      "slug": "non-fiction-books-of-the-month",
+      "url": "https://www.worldofbooks.com/en-gb/pages/non-fiction-books-of-the-month",
+      "hasChildren": true
+    },
+    {
+      "title": "Shop Now",
+      "slug": "childrens",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens",
+      "hasChildren": false
+    },
+    {
+      "title": "Baby & Toddler",
+      "slug": "baby-and-toddler-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/baby-and-toddler-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Ages 5-8",
+      "slug": "childrens-books-ages-5-8",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens-books-ages-5-8",
+      "hasChildren": false
+    },
+    {
+      "title": "Ages 9-12",
+      "slug": "childrens-books-ages-9-12",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens-books-ages-9-12",
+      "hasChildren": false
+    },
+    {
+      "title": "Teenage & YA",
+      "slug": "teenage-and-young-adult-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/teenage-and-young-adult-books",
+      "hasChildren": false
+    },
+    {
+      "title": "All Children's Books",
+      "slug": "childrens-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Children's Non-Fiction",
+      "slug": "childrens-non-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-non-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Children's Reference Books",
+      "slug": "childrens-reference-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-reference-books",
+      "hasChildren": true
+    },
+    {
+      "title": "🔥 New Arrivals",
+      "slug": "new-in",
+      "url": "https://www.worldofbooks.com/en-gb/pages/new-in",
+      "hasChildren": false
+    },
+    {
+      "title": "🍎 Back to School",
+      "slug": "back-to-school",
+      "url": "https://www.worldofbooks.com/en-gb/pages/back-to-school",
+      "hasChildren": false
+    },
+    {
+      "title": "💚 Kids' Favourite Characters",
+      "slug": "childrens-favourite-characters",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens-favourite-characters",
+      "hasChildren": false
+    },
+    {
+      "title": "💙 Kids' Favourite Series",
+      "slug": "childrens-favourite-series",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens-favourite-series",
+      "hasChildren": false
+    },
+    {
+      "title": "🎓 Textbooks",
+      "slug": "textbooks",
+      "url": "https://www.worldofbooks.com/en-gb/pages/textbooks",
+      "hasChildren": true
+    },
+    {
+      "title": "Rare Fiction Books",
+      "slug": "rare-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Adult & Erotic Books",
+      "slug": "rare-adult-and-erotic-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-adult-and-erotic-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Crime",
+      "slug": "rare-crime-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-crime-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Fantasy Books",
+      "slug": "rare-fantasy-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-fantasy-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Foreign Language Books",
+      "slug": "rare-foreign-language-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-foreign-language-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Horror Books",
+      "slug": "rare-horror-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-horror-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Romance Books",
+      "slug": "rare-romance-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-romance-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Sci-Fi Books",
+      "slug": "rare-sci-fi-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-sci-fi-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Thriller Books",
+      "slug": "rare-thriller-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-thriller-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Rare Non-Fiction Books",
+      "slug": "rare-non-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-non-fiction-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Antiques & Collectables Books",
+      "slug": "rare-antiques-collectables-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-antiques-collectables-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Biography & True Story Books",
+      "slug": "rare-biography-true-story-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-biography-true-story-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Children's Books",
+      "slug": "rare-childrens-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-childrens-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Economics Books",
+      "slug": "rare-economics-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-economics-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Ephemera & Heritage",
+      "slug": "rare-ephemera",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-ephemera",
+      "hasChildren": false
+    },
+    {
+      "title": "General Non-Fiction Books",
+      "slug": "general-non-fiction",
+      "url": "https://www.worldofbooks.com/en-gb/collections/general-non-fiction",
+      "hasChildren": true
+    },
+    {
+      "title": "Humanities Books",
+      "slug": "rare-humanities-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-humanities-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Law Books",
+      "slug": "rare-law-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-law-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Medicine Books",
+      "slug": "rare-medicine-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-medicine-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Non-Fiction General",
+      "slug": "rare-non-fiction-general-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-non-fiction-general-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Religion & Spirituality Books",
+      "slug": "rare-religion-spirituality-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-religion-spirituality-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Science Books",
+      "slug": "rare-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-science-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Social Sciences Books",
+      "slug": "rare-social-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-social-sciences-books",
+      "hasChildren": true
+    },
+    {
+      "title": "All Music",
+      "slug": "media-music",
+      "url": "https://www.worldofbooks.com/en-gb/collections/media-music",
+      "hasChildren": true
+    },
+    {
+      "title": "Blues",
+      "slug": "blues-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/blues-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Children's Music",
+      "slug": "childrens-music",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-music",
+      "hasChildren": true
+    },
+    {
+      "title": "Classical",
+      "slug": "classical-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/classical-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Country",
+      "slug": "country-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/country-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Dance",
+      "slug": "dance-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dance-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Easy Listening",
+      "slug": "easy-listening-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/easy-listening-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Folk",
+      "slug": "folk-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/folk-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Jazz",
+      "slug": "jazz-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/jazz-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Metal",
+      "slug": "metal-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/metal-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "New Age",
+      "slug": "new-age-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/new-age-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Pop",
+      "slug": "pop-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/pop-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "R&B / Soul",
+      "slug": "randb-and-soul-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/randb-and-soul-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Rap / Hip-Hop",
+      "slug": "hip-hop-and-rap-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/hip-hop-and-rap-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Reggae",
+      "slug": "reggae-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/reggae-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Rock",
+      "slug": "rock-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rock-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "Soundtracks",
+      "slug": "soundtrack-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/soundtrack-cds",
+      "hasChildren": false
+    },
+    {
+      "title": "World Music",
+      "slug": "world-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/world-cds",
+      "hasChildren": true
+    },
+    {
+      "title": "All DVD & Blu-Ray",
+      "slug": "dvds-and-blu-ray",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvds-and-blu-ray",
+      "hasChildren": false
+    },
+    {
+      "title": "Action & Adventure",
+      "slug": "dvd-action-and-adventure-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-action-and-adventure-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Animation",
+      "slug": "dvd-animation-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-animation-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Anime",
+      "slug": "dvd-anime-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-anime-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Children",
+      "slug": "dvd-childrens-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-childrens-films",
+      "hasChildren": true
+    },
+    {
+      "title": "Comedy",
+      "slug": "dvd-comedy-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-comedy-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Crime",
+      "slug": "dvd-crime-tv-and-movies",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-crime-tv-and-movies",
+      "hasChildren": false
+    },
+    {
+      "title": "Documentary",
+      "slug": "dvd-documentary-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-documentary-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Drama",
+      "slug": "dvd-drama-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-drama-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Fitness",
+      "slug": "dvd-fitness",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-fitness",
+      "hasChildren": false
+    },
+    {
+      "title": "Horror",
+      "slug": "dvd-horror-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-horror-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Military & War",
+      "slug": "dvd-military-and-war-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-military-and-war-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Music & Musical",
+      "slug": "music-and-musical-dvds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/music-and-musical-dvds",
+      "hasChildren": true
+    },
+    {
+      "title": "Other",
+      "slug": "dvd-other-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-other-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Romance",
+      "slug": "dvd-romance-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-romance-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Sci-Fi & Fantasy",
+      "slug": "dvd-sci-fi-and-fantasy-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-sci-fi-and-fantasy-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Special Interest",
+      "slug": "dvd-special-interest",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-special-interest",
+      "hasChildren": false
+    },
+    {
+      "title": "Sports",
+      "slug": "dvd-sports-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-sports-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Thriller",
+      "slug": "dvd-thriller-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-thriller-films",
+      "hasChildren": false
+    },
+    {
+      "title": "Western",
+      "slug": "dvd-western-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-western-films",
+      "hasChildren": false
+    },
+    {
+      "title": "World Cinema",
+      "slug": "dvd-world-cinema",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-world-cinema",
+      "hasChildren": false
+    },
+    {
+      "title": "All Video Games",
+      "slug": "video-games",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games",
+      "hasChildren": false
+    },
+    {
+      "title": "Action/Adventure",
+      "slug": "video-games-action-adventure",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-action-adventure",
+      "hasChildren": false
+    },
+    {
+      "title": "Family/Casual",
+      "slug": "video-games-family-and-casual",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-family-and-casual",
+      "hasChildren": false
+    },
+    {
+      "title": "Fighting",
+      "slug": "video-games-fighting",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-fighting",
+      "hasChildren": false
+    },
+    {
+      "title": "Horror/Sci-Fi",
+      "slug": "video-games-horror-and-sci-fi",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-horror-and-sci-fi",
+      "hasChildren": false
+    },
+    {
+      "title": "Music",
+      "slug": "video-games-music",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-music",
+      "hasChildren": true
+    },
+    {
+      "title": "Others",
+      "slug": "video-games-other",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-other",
+      "hasChildren": false
+    },
+    {
+      "title": "Racing",
+      "slug": "video-games-racing",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-racing",
+      "hasChildren": false
+    },
+    {
+      "title": "Role Playing",
+      "slug": "video-games-role-playing",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-role-playing",
+      "hasChildren": false
+    },
+    {
+      "title": "Shooter",
+      "slug": "video-games-shooter",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-shooter",
+      "hasChildren": false
+    },
+    {
+      "title": "Simulation",
+      "slug": "video-games-simulation",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-simulation",
+      "hasChildren": false
+    },
+    {
+      "title": "Sports",
+      "slug": "video-games-sports",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-sports",
+      "hasChildren": false
+    },
+    {
+      "title": "Strategy",
+      "slug": "video-games-strategy",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-strategy",
+      "hasChildren": false
+    },
+    {
+      "title": "Join +Plus",
+      "slug": "world-of-books-plus-1",
+      "url": "https://www.worldofbooks.com/en-gb/products/world-of-books-plus-1",
+      "hasChildren": false
+    },
+    {
+      "title": "Sell Your Books",
+      "slug": "wobuk",
+      "url": "https://ziffit.onelink.me/mXLK/wobuk",
+      "hasChildren": true
+    },
+    {
+      "title": "Wishlist",
+      "slug": "swym-wishlist",
+      "url": "https://www.worldofbooks.com/en-gb/pages/swym-wishlist",
+      "hasChildren": false
+    },
+    {
+      "title": "Help Center",
+      "slug": "home",
+      "url": "https://help.worldofbooks.com/en/support/home",
+      "hasChildren": false
+    },
+    {
+      "title": "Basket\n          Basket",
+      "slug": "cart",
+      "url": "https://www.worldofbooks.com/en-gb/cart",
+      "hasChildren": false
+    },
+    {
+      "title": "eGift Cards",
+      "slug": "gift-cards",
+      "url": "https://www.worldofbooks.com/en-gb/pages/gift-cards",
+      "hasChildren": false
+    },
+    {
+      "title": "🔥 Trending Books",
+      "slug": "trending-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/trending-books",
+      "hasChildren": true
+    },
+    {
+      "title": "🏳️‍🌈 LGBTQ+ Shelf",
+      "slug": "pride-month",
+      "url": "https://www.worldofbooks.com/en-gb/pages/pride-month",
+      "hasChildren": false
+    },
+    {
+      "title": "Stephen King",
+      "slug": "author-books-by-stephen-king",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-stephen-king",
+      "hasChildren": false
+    },
+    {
+      "title": "Agatha Christie",
+      "slug": "author-books-by-agatha-christie",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-agatha-christie",
+      "hasChildren": false
+    },
+    {
+      "title": "Sarah J Maas",
+      "slug": "author-books-by-sarah-j-maas",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-sarah-j-maas",
+      "hasChildren": false
+    },
+    {
+      "title": "Colleen Hoover",
+      "slug": "author-books-by-colleen-hoover",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-colleen-hoover",
+      "hasChildren": false
+    },
+    {
+      "title": "Earth Sciences",
+      "slug": "all-earth-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/all-earth-sciences-books",
+      "hasChildren": false
+    },
+    {
+      "title": "🏆 International Booker Prize",
+      "slug": "international-booker-prize",
+      "url": "https://www.worldofbooks.com/en-gb/pages/international-booker-prize",
+      "hasChildren": false
+    },
+    {
+      "title": "Music",
+      "slug": "music-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/music-books",
+      "hasChildren": true
+    },
+    {
+      "title": "Arts & Crafts",
+      "slug": "arts-and-crafts-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/arts-and-crafts-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Learn A Language",
+      "slug": "teaching-and-learning-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/teaching-and-learning-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Sustainability",
+      "slug": "all",
+      "url": "https://www.worldofbooks.com/en-gb/collections/all?q=sustainability",
+      "hasChildren": false
+    },
+    {
+      "title": "Mind, Body & Spirit",
+      "slug": "mind-body-and-spirit-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/mind-body-and-spirit-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Travel",
+      "slug": "travel-and-holiday-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/travel-and-holiday-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Quizzes & Games",
+      "slug": "hobby-quiz-and-game-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/hobby-quiz-and-game-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Politics & Governance",
+      "slug": "politics-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/politics-books",
+      "hasChildren": false
+    },
+    {
+      "title": "Julia Donaldson",
+      "slug": "author-books-by-julia-donaldson",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-julia-donaldson",
+      "hasChildren": false
+    },
+    {
+      "title": "Tom Fletcher",
+      "slug": "author-books-by-tom-fletcher",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-tom-fletcher",
+      "hasChildren": false
+    },
+    {
+      "title": "Roald Dahl",
+      "slug": "author-books-by-roald-dahl",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-roald-dahl",
+      "hasChildren": false
+    },
+    {
+      "title": "Alice Oseman",
+      "slug": "author-books-by-alice-oseman",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-alice-oseman",
+      "hasChildren": false
+    },
+    {
+      "title": "Holly Jackson",
+      "slug": "author-books-by-holly-jackson",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-holly-jackson",
+      "hasChildren": false
+    },
+    {
+      "title": "Karen M. McManus",
+      "slug": "author-books-by-karen-m-mcmanus",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-karen-m-mcmanus",
+      "hasChildren": false
+    },
+    {
+      "title": "Jennifer Lynn Barnes",
+      "slug": "author-books-by-jennifer-lynn-barnes",
+      "url": "https://www.worldofbooks.com/en-gb/collections/author-books-by-jennifer-lynn-barnes",
+      "hasChildren": false
+    },
+    {
+      "title": "Rare Books",
+      "slug": "rarebooks",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rarebooks",
+      "hasChildren": true
+    },
+    {
+      "title": "Music & Film",
+      "slug": "music-film",
+      "url": "https://www.worldofbooks.com/en-gb/pages/music-film",
+      "hasChildren": true
+    }
+  ],
+  "categories": []
+}

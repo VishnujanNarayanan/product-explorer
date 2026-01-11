@@ -16,19 +16,18 @@ export interface ProductPreview {
 @Injectable()
 export class CategoryScraper extends BaseScraper {
   private readonly SELECTORS = {
-    PRODUCT_GRID: '.plp-listing.product-grid-container',
-    PRODUCT_CARD: '.main-product-card.card-wrapper.product-card-wrapper',
-    PRODUCT_TITLE: '.card__heading.h5 a',
-    PRODUCT_AUTHOR: '.author.truncate-author',
-    PRODUCT_PRICE: '.price .price-item',
-    PRODUCT_IMAGE: '.card__inner img',
-    LOAD_MORE_BUTTON: '#custom-load-more',
-    PRODUCT_COUNT: '.plp-listing__count span',
-    COOKIE_CONSENT: '#onetrust-consent-sdk, .onetrust-pc-dark-filter',
-    COOKIE_ACCEPT: '#onetrust-accept-btn-handler, button[aria-label="Accept"]',
+    // More robust selectors
+    PRODUCT_GRID: '.plp-listing, .product-grid, [class*="product-grid"]',
+    PRODUCT_CARD: '.main-product-card, .product-card, [class*="product-card"]',
+    PRODUCT_TITLE: '.card__heading a, .product-title a, h3 a, [class*="title"] a',
+    PRODUCT_AUTHOR: '.author, .product-author, [class*="author"], .truncate-author',
+    PRODUCT_PRICE: '.price-item, .money, .product-price, [class*="price"]',
+    PRODUCT_IMAGE: 'img[src*="products"], .card__inner img, .product-image img',
+    LOAD_MORE: '#custom-load-more, .load-more, button:has-text("Load More"), [aria-label*="load more"]',
+    PRODUCT_COUNT: '.plp-listing__count, .product-count, .results-count',
   };
 
-  async scrape(url: string, categorySlug: string): Promise<ProductPreview[]> {
+  async scrape(url: string, categorySlug: string, maxProducts: number = 100): Promise<ProductPreview[]> {
     const products: ProductPreview[] = [];
 
     // @ts-ignore - Type issues with Crawlee v3
@@ -58,101 +57,46 @@ export class CategoryScraper extends BaseScraper {
       requestHandler: async ({ page, request }) => {
         this.logger.log(`Scraping category: ${categorySlug} from ${request.url}`);
         
-        // 1. Handle cookie consent FIRST
-        await this.handleCookieConsent(page);
-        
-        // 2. Wait for initial page load
+        // Wait for product grid
         await page.waitForSelector(this.SELECTORS.PRODUCT_GRID, { timeout: 15000 });
         await this.delay(2000);
         
-        let clickCount = 0;
-        const MAX_CLICKS = 2; // Just 2 clicks = 40 + 40 = 80 products (enough for demo)
-        let previousProductCount = 0;
+        let totalProducts = 0;
+        const MAX_PAGES = 3; // Limit to 3 pages for demo
         
-        // 3. Extract initial products
-        await this.extractProductsFromPage(page, categorySlug, products);
-        this.logger.log(`Initial load: ${products.length} products`);
-        
-        while (clickCount < MAX_CLICKS) {
+        // Extract products with pagination
+        for (let pageNum = 1; pageNum <= MAX_PAGES && products.length < maxProducts; pageNum++) {
           try {
-            // Check if "Load more" button exists
-            const loadMoreButton = await page.$(this.SELECTORS.LOAD_MORE_BUTTON);
+            this.logger.log(`Processing page ${pageNum} for ${categorySlug}`);
             
-            if (!loadMoreButton) {
-              this.logger.log('No "Load more" button found');
-              break;
+            // Extract current page products
+            const pageProducts = await this.extractPageProducts(page, categorySlug);
+            
+            // Add new products
+            for (const product of pageProducts) {
+              if (!products.some(p => p.source_id === product.source_id)) {
+                products.push(product);
+                totalProducts++;
+                
+                if (totalProducts >= maxProducts) break;
+              }
             }
             
-            // Scroll a bit to make sure button is in view
-            await page.evaluate(() => window.scrollBy(0, 300));
-            await this.delay(1000);
-            
-            // Click using JavaScript to avoid Playwright click blocking
-            this.logger.log(`Clicking "Load more" via JavaScript (click ${clickCount + 1}/${MAX_CLICKS})`);
-            
-            await page.evaluate((selector) => {
-              const button = document.querySelector(selector);
-              if (button) {
-                (button as HTMLElement).click();
-              }
-            }, this.SELECTORS.LOAD_MORE_BUTTON);
-            
-            // Wait for new products (1-2 seconds as you mentioned)
-            await this.delay(2000);
-            
-            // Check if new products loaded
-            const currentProductCount = await page.$$eval(
-              this.SELECTORS.PRODUCT_CARD,
-              (elements: any[]) => elements.length
-            );
-            
-            if (currentProductCount > previousProductCount) {
-              this.logger.log(`New products loaded: ${currentProductCount} total (was ${previousProductCount})`);
+            // Try to load next page if not reached limit
+            if (totalProducts < maxProducts) {
+              const hasMore = await this.loadNextPage(page);
+              if (!hasMore) break;
               
-              // Extract only NEW products (to avoid duplicates)
-              const newProductElements = await page.$$(this.SELECTORS.PRODUCT_CARD);
-              const startIndex = previousProductCount;
-              
-              for (let i = startIndex; i < newProductElements.length && products.length < 120; i++) {
-                try {
-                  const productEl = newProductElements[i];
-                  const productData = await this.extractSingleProduct(productEl, categorySlug);
-                  
-                  if (productData && !products.some(p => p.source_id === productData.source_id)) {
-                    products.push(productData);
-                  }
-                } catch (error: any) {
-                  // Skip individual errors
-                }
-              }
-              
-              previousProductCount = currentProductCount;
-              clickCount++;
-              
-              // Small delay between clicks
-              await this.delay(1000);
-            } else {
-              this.logger.log('No new products detected after click');
-              break;
+              await this.delay(2000); // Wait for new products
             }
             
           } catch (error: any) {
-            this.logger.warn(`Error during pagination: ${error.message}`);
+            this.logger.warn(`Page ${pageNum} failed: ${error.message}`);
             break;
           }
         }
         
-        this.logger.log(`Final: Scraped ${products.length} products from category: ${categorySlug}`);
-        
-        // Log product count
-        try {
-          const countText = await page.$eval(this.SELECTORS.PRODUCT_COUNT, (el: any) => el.textContent);
-          if (countText) {
-            this.logger.log(`Page shows: ${countText.trim()}`);
-          }
-        } catch (error) {
-          // Ignore if not found
-        }
+        this.logger.log(`Scraped ${products.length} products from ${categorySlug}`);
       },
     });
 
@@ -160,122 +104,198 @@ export class CategoryScraper extends BaseScraper {
       url, 
       uniqueKey: `category-${categorySlug}-${Date.now()}`,
       label: 'category',
-      userData: { categorySlug, maxProducts: 120 }
+      userData: { categorySlug, maxProducts }
     }]);
     
     return products;
   }
 
   /**
-   * Handle cookie consent modal
+   * Extract products from current page
    */
-  private async handleCookieConsent(page: any): Promise<void> {
-    try {
-      const cookieConsent = await page.$(this.SELECTORS.COOKIE_CONSENT);
-      if (cookieConsent) {
-        this.logger.log('Cookie consent modal detected, attempting to accept...');
-        
-        const acceptButton = await page.$(this.SELECTORS.COOKIE_ACCEPT);
-        if (acceptButton) {
-          // Use JavaScript click to avoid blocking
-          await page.evaluate(() => {
-            const button = document.querySelector('#onetrust-accept-btn-handler') as HTMLButtonElement;
-            if (button) button.click();
-          });
-          this.logger.log('Accepted cookies via JavaScript');
-          await this.delay(2000);
-        }
-      }
-    } catch (error: any) {
-      this.logger.warn(`Could not handle cookie consent: ${error.message}`);
-    }
-  }
-
-  /**
-   * Extract products from current page (initial load)
-   */
-  private async extractProductsFromPage(
-    page: any, 
-    categorySlug: string, 
-    products: ProductPreview[]
-  ): Promise<void> {
+  private async extractPageProducts(page: any, categorySlug: string): Promise<ProductPreview[]> {
+    const products: ProductPreview[] = [];
+    
     const productElements = await page.$$(this.SELECTORS.PRODUCT_CARD);
-    this.logger.debug(`Found ${productElements.length} product elements`);
+    this.logger.debug(`Found ${productElements.length} products on page`);
     
     for (const productEl of productElements) {
       try {
-        const productData = await this.extractSingleProduct(productEl, categorySlug);
-        if (productData && !products.some(p => p.source_id === productData.source_id)) {
-          products.push(productData);
-        }
-      } catch (error: any) {
-        // Skip individual product errors
+        const product = await this.extractSingleProduct(productEl, categorySlug);
+        if (product) products.push(product);
+      } catch (error) {
+        // Skip failed products
       }
     }
+    
+    return products;
   }
 
   /**
-   * Extract single product data
+   * Extract single product
    */
   private async extractSingleProduct(
     productEl: any,
     categorySlug: string
   ): Promise<ProductPreview | null> {
     try {
-      const titleElement = await productEl.$(this.SELECTORS.PRODUCT_TITLE);
-      const authorElement = await productEl.$(this.SELECTORS.PRODUCT_AUTHOR);
-      const priceElement = await productEl.$(this.SELECTORS.PRODUCT_PRICE);
-      const imageElement = await productEl.$(this.SELECTORS.PRODUCT_IMAGE);
-
-      const title = await titleElement?.textContent();
-      const author = await authorElement?.textContent();
-      const priceText = await priceElement?.textContent();
-      const imageUrl = await imageElement?.getAttribute('src');
-      const productUrl = await titleElement?.getAttribute('href');
-
-      if (!title || !productUrl) {
-        return null;
-      }
-
+      // Try multiple selector strategies
+      const title = await this.extractText(productEl, [
+        '.card__heading a',
+        '.product-title',
+        'h3 a',
+        '[class*="title"]'
+      ]);
+      
+      const author = await this.extractText(productEl, [
+        '.author',
+        '.product-author',
+        '[class*="author"]'
+      ]);
+      
+      const priceText = await this.extractText(productEl, [
+        '.price-item',
+        '.money',
+        '.product-price'
+      ]);
+      
+      const imageUrl = await this.extractAttribute(productEl, 'src', [
+        'img[src*="products"]',
+        '.card__inner img',
+        '.product-image img',
+        'img'
+      ]);
+      
+      const productUrl = await this.extractAttribute(productEl, 'href', [
+        '.card__heading a',
+        '.product-title a',
+        'a[href*="/products/"]'
+      ]);
+      
+      if (!title || !productUrl) return null;
+      
       const sourceId = this.extractSourceId(productUrl);
-      const fullProductUrl = productUrl.startsWith('http') ? productUrl : `https://www.worldofbooks.com${productUrl}`;
+      const fullUrl = productUrl.startsWith('http') ? productUrl : `https://www.worldofbooks.com${productUrl}`;
       const { amount: price, currency } = this.normalizePrice(priceText || '');
-
+      
       return {
         source_id: sourceId,
         title: title.trim(),
         author: author?.trim() || 'Unknown',
         price,
-        currency,
+        currency: currency || 'GBP',
         image_url: imageUrl || '',
-        source_url: fullProductUrl,
+        source_url: fullUrl,
         category_slug: categorySlug,
       };
-    } catch (error: any) {
-      this.logger.debug(`Failed to extract product: ${error.message}`);
+    } catch (error) {
       return null;
     }
   }
 
   /**
-   * Extract source ID from product URL
+   * Try multiple selectors for text extraction
+   */
+  private async extractText(element: any, selectors: string[]): Promise<string | null> {
+    for (const selector of selectors) {
+      try {
+        const el = await element.$(selector);
+        if (el) {
+          const text = await el.textContent();
+          if (text?.trim()) return text.trim();
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Try multiple selectors for attribute extraction
+   */
+  private async extractAttribute(element: any, attribute: string, selectors: string[]): Promise<string | null> {
+    for (const selector of selectors) {
+      try {
+        const el = await element.$(selector);
+        if (el) {
+          const value = await el.getAttribute(attribute);
+          if (value) return value;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Load next page of products
+   */
+  private async loadNextPage(page: any): Promise<boolean> {
+    try {
+      // Try multiple load more button selectors
+      const loadMoreSelectors = [
+        '#custom-load-more',
+        '.load-more',
+        'button:has-text("Load More")',
+        '[aria-label*="load more"]'
+      ];
+      
+      for (const selector of loadMoreSelectors) {
+        const button = await page.$(selector);
+        if (button) {
+          await button.scrollIntoViewIfNeeded();
+          await this.delay(500);
+          
+          // Click via JavaScript to avoid blocking
+          await page.evaluate((sel) => {
+            const btn = document.querySelector(sel);
+            if (btn) (btn as HTMLElement).click();
+          }, selector);
+          
+          this.logger.debug(`Clicked load more: ${selector}`);
+          return true;
+        }
+      }
+      
+      // Check for pagination links
+      const nextLink = await page.$('a[rel="next"], .pagination__next, a:has-text("Next")');
+      if (nextLink) {
+        await nextLink.click();
+        this.logger.debug('Clicked next page link');
+        return true;
+      }
+      
+    } catch (error) {
+      this.logger.debug('No more pages or failed to load next page');
+    }
+    
+    return false;
+  }
+
+  /**
+   * Improved source ID generation
    */
   private extractSourceId(url: string): string {
-    // Try to extract ISBN from URL
-    const isbnMatch = url.match(/\d{10,13}/);
-    if (isbnMatch) {
-      return `WOB-ISBN-${isbnMatch[0]}`;
-    }
+    // Extract ISBN
+    const isbnMatch = url.match(/\b\d{10,13}\b/);
+    if (isbnMatch) return `WOB-ISBN-${isbnMatch[0]}`;
     
     // Extract from URL path
-    const urlParts = url.split('/').filter(part => part.length > 0);
-    const lastPart = urlParts[urlParts.length - 1];
+    const urlObj = new URL(url.startsWith('http') ? url : `https://www.worldofbooks.com${url}`);
+    const pathParts = urlObj.pathname.split('/').filter(p => p);
     
-    if (lastPart && !['en-gb', 'collections', 'products'].includes(lastPart)) {
-      return `WOB-${lastPart}`;
+    // Get product slug (last non-empty part)
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+      if (pathParts[i] && 
+          !['en-gb', 'collections', 'products', 'pages'].includes(pathParts[i]) &&
+          pathParts[i].length > 3) {
+        return `WOB-${pathParts[i]}`;
+      }
     }
     
-    // Fallback hash
-    return `WOB-${Buffer.from(url).toString('base64').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '')}`;
+    // Fallback: hash of URL
+    return `WOB-${Buffer.from(url).toString('base64').substring(0, 15).replace(/[^a-zA-Z0-9]/g, '')}`;
   }
 }

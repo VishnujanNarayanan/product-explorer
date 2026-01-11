@@ -187,7 +187,6 @@ export class ScrapeProcessor {
       // Get product entity
       const product = await this.productRepo.findOne({
         where: { id: productId },
-        relations: ['detail'],
       });
 
       if (!product) {
@@ -195,12 +194,17 @@ export class ScrapeProcessor {
       }
 
       // Save or update product detail
-      if (product.detail) {
+      let existingDetail = await this.productDetailRepo.findOne({
+        where: { product_id: product.id },
+      });
+
+      if (existingDetail) {
         // Update existing detail
-        product.detail.description = detailData.description;
-        product.detail.specs = detailData.specs;
-        product.detail.reviews_count = detailData.reviews.length;
-        await this.productDetailRepo.save(product.detail);
+        existingDetail.description = detailData.description;
+        existingDetail.specs = detailData.specs;
+        existingDetail.reviews_count = detailData.reviews.length;
+        await this.productDetailRepo.save(existingDetail);
+        this.logger.debug(`Updated existing detail for product ${product.id}`);
       } else {
         // Create new detail
         const newDetail = this.productDetailRepo.create({
@@ -209,18 +213,31 @@ export class ScrapeProcessor {
           specs: detailData.specs,
           reviews_count: detailData.reviews.length,
         });
+        
+        this.logger.debug(`Creating new detail for product ID: ${product.id}`);
         await this.productDetailRepo.save(newDetail);
+        this.logger.debug(`Created new detail for product ${product.id}`);
       }
 
-      // Save reviews
+      // Save reviews - only add new ones to avoid duplicates
+      const existingReviews = await this.reviewRepo.find({
+        where: { product: { id: product.id } },
+      });
+
       for (const reviewData of detailData.reviews) {
-        const review = this.reviewRepo.create({
-          product: product,
-          author: reviewData.author || 'Anonymous',
-          rating: reviewData.rating || 0,
-          text: reviewData.text,
-        });
-        await this.reviewRepo.save(review);
+        const reviewExists = existingReviews.some(
+          r => r.text === reviewData.text && r.author === (reviewData.author || 'Anonymous')
+        );
+
+        if (!reviewExists) {
+          const review = this.reviewRepo.create({
+            product: product,
+            author: reviewData.author || 'Anonymous',
+            rating: reviewData.rating || 0,
+            text: reviewData.text,
+          });
+          await this.reviewRepo.save(review);
+        }
       }
 
       // Update product timestamp

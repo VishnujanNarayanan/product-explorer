@@ -1,0 +1,432 @@
+{
+  "navigation": [
+    {
+      "title": "Clearance",
+      "slug": "clearance",
+      "url": "https://www.worldofbooks.com/en-gb/pages/clearance",
+      "hasChildren": false
+    },
+    {
+      "title": "eGift Cards",
+      "slug": "Gift-cards",
+      "url": "https://www.worldofbooks.com/en-gb/pages/Gift-cards",
+      "hasChildren": false
+    },
+    {
+      "title": "Fiction Books",
+      "slug": "fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/fiction",
+      "hasChildren": true
+    },
+    {
+      "title": "Non-Fiction Books",
+      "slug": "non-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/non-fiction",
+      "hasChildren": true
+    },
+    {
+      "title": "Children's Books",
+      "slug": "rare-childrens-books",
+      "url": "https://www.worldofbooks.com/en-gb/pages/childrens",
+      "hasChildren": true
+    },
+    {
+      "title": "Rare Books",
+      "slug": "rarebooks",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rarebooks",
+      "hasChildren": true
+    },
+    {
+      "title": "Music & Film",
+      "slug": "music-film",
+      "url": "https://www.worldofbooks.com/en-gb/pages/music-film",
+      "hasChildren": true
+    },
+    {
+      "title": "Sell Your Books",
+      "slug": "wobuk",
+      "url": "https://ziffit.onelink.me/mXLK/wobuk",
+      "hasChildren": false
+    }
+  ],
+  "categories": [
+    {
+      "title": "Crime & Mystery",
+      "slug": "crime-and-mystery-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/crime-and-mystery-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Fantasy",
+      "slug": "fantasy-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/fantasy-fiction-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Romance",
+      "slug": "romance-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/romance-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Adventure",
+      "slug": "adventure-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/adventure-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Thriller & Suspense",
+      "slug": "thriller-and-suspense-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/thriller-and-suspense-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Classic Fiction",
+      "slug": "classic-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/classic-fiction-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Horror & Ghost Stories",
+      "slug": "horror-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/horror-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Science Fiction",
+      "slug": "science-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/science-fiction-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Biography & True Stories",
+      "slug": "biography-and-true-story-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/biography-and-true-story-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Health & Personal Development",
+      "slug": "health-and-personal-development-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/health-and-personal-development-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Arts Books",
+      "slug": "arts-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/arts-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Earth Sciences",
+      "slug": "earth-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/earth-sciences-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Mathematics & Science",
+      "slug": "mathematics-and-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/mathematics-and-science-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Social Sciences",
+      "slug": "social-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/social-science-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Technology",
+      "slug": "technology-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/technology-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Health & Fitness",
+      "slug": "family-and-health-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/family-and-health-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Cookery & Recipe",
+      "slug": "cookbooks-and-recipe-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/cookbooks-and-recipe-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Children's Fiction & True Stories",
+      "slug": "childrens-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-fiction-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Children's Non-Fiction",
+      "slug": "childrens-non-fiction-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-non-fiction-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Children's Reference Books",
+      "slug": "childrens-reference-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-reference-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Children's Education & Learning",
+      "slug": "educational-material-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/educational-material-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Children's Poetry & Anthologies",
+      "slug": "childrens-poetry-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-poetry-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Children's Personal & Social Issues",
+      "slug": "childrens-personal-and-social-issues-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-personal-and-social-issues-books",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Crime",
+      "slug": "rare-crime-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-crime-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Fantasy Books",
+      "slug": "rare-fantasy-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-fantasy-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Horror Books",
+      "slug": "rare-horror-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-horror-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Romance Books",
+      "slug": "rare-romance-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-romance-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Thriller Books",
+      "slug": "rare-thriller-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-thriller-books",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Antiques & Collectables Books",
+      "slug": "rare-antiques-collectables-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-antiques-collectables-books",
+      "parentSlug": "rarebooks",
+      "level": 1
+    },
+    {
+      "title": "Biography & True Story Books",
+      "slug": "rare-biography-true-story-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-biography-true-story-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Ephemera & Heritage",
+      "slug": "rare-ephemera",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-ephemera",
+      "parentSlug": "rarebooks",
+      "level": 1
+    },
+    {
+      "title": "Science Books",
+      "slug": "rare-science-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-science-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Social Sciences Books",
+      "slug": "rare-social-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-social-sciences-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Technology, Engineering & Agriculture Books",
+      "slug": "rare-technology-engineering-agriculture-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rare-technology-engineering-agriculture-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "All Music",
+      "slug": "media-music",
+      "url": "https://www.worldofbooks.com/en-gb/collections/media-music",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Blues",
+      "slug": "blues-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/blues-cds",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Children's Music",
+      "slug": "childrens-music",
+      "url": "https://www.worldofbooks.com/en-gb/collections/childrens-music",
+      "parentSlug": "childrens",
+      "level": 1
+    },
+    {
+      "title": "Classical",
+      "slug": "classical-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/classical-cds",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Jazz",
+      "slug": "jazz-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/jazz-cds",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Rock",
+      "slug": "rock-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/rock-cds",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "World Music",
+      "slug": "world-cds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/world-cds",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "All DVD & Blu-Ray",
+      "slug": "dvds-and-blu-ray",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvds-and-blu-ray",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Action & Adventure",
+      "slug": "dvd-action-and-adventure-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-action-and-adventure-films",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Crime",
+      "slug": "dvd-crime-tv-and-movies",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-crime-tv-and-movies",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Horror",
+      "slug": "dvd-horror-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-horror-films",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Music & Musical",
+      "slug": "music-and-musical-dvds",
+      "url": "https://www.worldofbooks.com/en-gb/collections/music-and-musical-dvds",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Romance",
+      "slug": "dvd-romance-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-romance-films",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Sci-Fi & Fantasy",
+      "slug": "dvd-sci-fi-and-fantasy-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-sci-fi-and-fantasy-films",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Thriller",
+      "slug": "dvd-thriller-films",
+      "url": "https://www.worldofbooks.com/en-gb/collections/dvd-thriller-films",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "All Video Games",
+      "slug": "video-games",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games",
+      "parentSlug": "music-film",
+      "level": 1
+    },
+    {
+      "title": "Action/Adventure",
+      "slug": "video-games-action-adventure",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-action-adventure",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Horror/Sci-Fi",
+      "slug": "video-games-horror-and-sci-fi",
+      "url": "https://www.worldofbooks.com/en-gb/collections/video-games-horror-and-sci-fi",
+      "parentSlug": "fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Earth Sciences",
+      "slug": "all-earth-sciences-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/all-earth-sciences-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    },
+    {
+      "title": "Arts & Crafts",
+      "slug": "arts-and-crafts-books",
+      "url": "https://www.worldofbooks.com/en-gb/collections/arts-and-crafts-books",
+      "parentSlug": "non-fiction-books",
+      "level": 1
+    }
+  ]
+}

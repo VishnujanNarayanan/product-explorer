@@ -129,6 +129,7 @@ export class ScraperService implements OnModuleInit {
       // Cache for 24 hours
       await this.cacheManager.set(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
 
+      this.logger.log(`Navigation scraping completed: ${savedNavigation.length} nav items, ${categories.length} categories saved`);
       return savedNavigation;
     } catch (error) {
       this.logger.error(`Navigation scraping failed: ${error.message}`);
@@ -136,16 +137,29 @@ export class ScraperService implements OnModuleInit {
     }
   }
 
-  async scrapeCategoryBySlug(slug: string): Promise<Product[]> {
+  async scrapeCategoryBySlug(slug: string): Promise<{ 
+    message: string; 
+    products: Product[];
+    category?: Category;
+    jobQueued: boolean;
+  }> {
     const cacheKey = `category_${slug}`;
     const cached = await this.cacheManager.get(cacheKey);
     
     if (cached) {
       this.logger.log(`Returning cached products for category: ${slug}`);
-      return cached as Product[];
+      return {
+        message: `Returning cached products for ${slug}`,
+        products: cached as Product[],
+        jobQueued: false
+      };
     }
 
-    const category = await this.categoryRepo.findOne({ where: { slug } });
+    const category = await this.categoryRepo.findOne({ 
+      where: { slug },
+      relations: ['navigation']
+    });
+    
     if (!category) {
       throw new Error(`Category not found: ${slug}`);
     }
@@ -161,48 +175,66 @@ export class ScraperService implements OnModuleInit {
     const products = await this.productRepo.find({
       where: { category: { id: category.id } },
       relations: ['category'],
+      take: 50 // Limit for API response
     });
 
     // Cache for 1 hour
     await this.cacheManager.set(cacheKey, products, 60 * 60 * 1000);
     
-    return products;
+    return {
+      message: `Scraping job queued for category: ${slug}. Returning ${products.length} existing products.`,
+      products,
+      category,
+      jobQueued: true
+    };
   }
 
   async scrapeProductBySourceId(sourceId: string, forceRefresh = false): Promise<Product | null> {
     const cacheKey = `product_${sourceId}`;
     
     if (!forceRefresh) {
-        const cached = await this.cacheManager.get(cacheKey);
-        if (cached) {
-        return cached as Product;
-        }
+      const cached = await this.cacheManager.get<Product>(cacheKey);
+      if (cached) {
+        return cached;
+      }
     }
 
-    const product = await this.productRepo.findOne({ 
+    try {
+      // KEEP the relations - should work now with fixed entity
+      const product = await this.productRepo.findOne({ 
         where: { source_id: sourceId },
         relations: ['detail', 'reviews', 'category'],
-    });
+      });
 
-    if (product && !forceRefresh) {
-        // Cache for 24 hours
-        await this.cacheManager.set(cacheKey, product, 24 * 60 * 60 * 1000);
-        return product;
-    }
+      if (!product) {
+        this.logger.warn(`Product not found: ${sourceId}`);
+        return null;
+      }
 
-    // Queue detail scraping job
-    if (product) {
+      // Always queue detail scrape if missing details or force refresh
+      if (forceRefresh || !product.detail) {
         await this.scrapingQueue.add('scrape-product-detail', {
-        productId: product.id,
-        url: product.source_url,
-        sourceId: product.source_id,
+          productId: product.id,
+          url: product.source_url,
+          sourceId: product.source_id,
         });
-    }
+      }
 
-    return product; 
+      // Cache for 24 hours
+      await this.cacheManager.set(cacheKey, product, 24 * 60 * 60 * 1000);
+      
+      return product;
+    } catch (error) {
+      this.logger.error(`Error fetching product ${sourceId}: ${error.message}`);
+      return null;
     }
+  }
 
-  async triggerOnDemandScrape(type: 'navigation' | 'category' | 'product', target: string): Promise<string> {
+  async triggerOnDemandScrape(type: 'navigation' | 'category' | 'product', target: string): Promise<{ 
+    success: boolean;
+    message: string;
+    jobId?: number;
+  }> {
     const job = await this.scrapeJobRepo.save({
       target_url: target,
       target_type: type,
@@ -210,34 +242,162 @@ export class ScraperService implements OnModuleInit {
       started_at: new Date(),
     });
 
-    switch (type) {
-      case 'navigation':
-        await this.scrapingQueue.add('scrape-navigation', { jobId: job.id });
-        break;
-      case 'category':
-        await this.scrapingQueue.add('scrape-category', { 
-          categorySlug: target,
-          jobId: job.id 
-        });
-        break;
-      case 'product':
-        await this.scrapingQueue.add('scrape-product-detail', { 
-          sourceId: target,
-          jobId: job.id 
-        });
-        break;
-    }
+    try {
+      switch (type) {
+        case 'navigation':
+          // Use the target as URL or default to BASE_URL
+          const url = target || this.BASE_URL;
+          await this.scrapingQueue.add('scrape-navigation', { 
+            jobId: job.id,
+            url
+          });
+          break;
+        
+        case 'category':
+          const category = await this.categoryRepo.findOne({ 
+            where: { slug: target } 
+          });
+          
+          if (!category) {
+            throw new Error(`Category not found: ${target}`);
+          }
+          
+          await this.scrapingQueue.add('scrape-category', { 
+            categorySlug: target,
+            categoryId: category.id,
+            url: `${this.BASE_URL}/collections/${target}`,
+            jobId: job.id 
+          });
+          break;
+        
+        case 'product':
+          const product = await this.productRepo.findOne({ 
+            where: { source_id: target } 
+          });
+          
+          if (!product) {
+            throw new Error(`Product not found: ${target}`);
+          }
+          
+          await this.scrapingQueue.add('scrape-product-detail', { 
+            sourceId: target,
+            productId: product.id,
+            url: product.source_url,
+            jobId: job.id 
+          });
+          break;
+      }
 
-    return `Job ${job.id} queued for ${type} scrape`;
+      return {
+        success: true,
+        message: `Job ${job.id} queued for ${type} scrape`,
+        jobId: job.id
+      };
+    } catch (error) {
+      // Update job status to failed
+      await this.scrapeJobRepo.update(job.id, {
+        status: 'failed',
+        finished_at: new Date(),
+        error_log: error.message
+      });
+      
+      throw error;
+    }
   }
 
   async getScrapeJobStatus(jobId: number): Promise<ScrapeJob> {
     return this.scrapeJobRepo.findOne({ where: { id: jobId } }) as Promise<ScrapeJob>;
   }
+  async cleanupOldData(): Promise<{ deleted: number; message: string }> {
+    try {
+      // First, delete categories linked to old navigation
+      const keepNavigationTitles = [
+        'Clearance',
+        'eGift Cards',
+        'Fiction Books',
+        'Non-Fiction Books',
+        'Children\'s Books',
+        'Rare Books',
+        'Music & Film',
+        'Sell Your Books'
+      ];
 
-  async clearCache(): Promise<void> {
-    const cache = this.cacheManager as any;
-    await cache.store.reset?.();
-    this.logger.log('Cache cleared');
+      // Get IDs of navigation items to keep
+      const keepNavigation = await this.navigationRepo
+        .createQueryBuilder('nav')
+        .select('nav.id')
+        .where('nav.title IN (:...titles)', { titles: keepNavigationTitles })
+        .getMany();
+
+      const keepIds = keepNavigation.map(nav => nav.id);
+
+      // 1. Delete categories that don't have valid navigation parent
+      const deletedCategories = await this.categoryRepo
+        .createQueryBuilder()
+        .delete()
+        .where('navigation_id NOT IN (:...ids)', { ids: keepIds.length > 0 ? keepIds : [0] })
+        .execute();
+
+      // 2. Delete old navigation items
+      const deletedNavigation = await this.navigationRepo
+        .createQueryBuilder()
+        .delete()
+        .where('title NOT IN (:...titles)', { titles: keepNavigationTitles })
+        .execute();
+
+      const totalDeleted = (deletedCategories.affected || 0) + (deletedNavigation.affected || 0);
+      
+      this.logger.log(`Cleaned up ${totalDeleted} items (${deletedCategories.affected || 0} categories, ${deletedNavigation.affected || 0} navigation)`);
+      
+      return {
+        deleted: totalDeleted,
+        message: `Cleaned up ${totalDeleted} items (${deletedCategories.affected || 0} categories, ${deletedNavigation.affected || 0} navigation)`
+      };
+    } catch (error) {
+      this.logger.error(`Cleanup failed: ${error.message}`);
+      return {
+        deleted: 0,
+        message: `Cleanup failed: ${error.message}`
+      };
+    }
+  }
+
+  async clearCache(): Promise<{ success: boolean; message: string }> {
+    try {
+      // Try different cache clearing methods
+      const cache = this.cacheManager as any;
+      
+      if (cache.store?.reset) {
+        await cache.store.reset();
+      } else if (cache.store?.flushAll) {
+        await cache.store.flushAll();
+      } else if (cache.store?.clear) {
+        await cache.store.clear();
+      } else {
+        // Manual cache key clearing for known keys
+        const knownKeys = ['navigation_data'];
+        for (const key of knownKeys) {
+          await this.cacheManager.del(key);
+        }
+        
+        // Clear category and product caches
+        const categories = await this.categoryRepo.find();
+        for (const category of categories) {
+          await this.cacheManager.del(`category_${category.slug}`);
+        }
+        
+        const products = await this.productRepo.find();
+        for (const product of products) {
+          await this.cacheManager.del(`product_${product.source_id}`);
+        }
+      }
+      
+      this.logger.log('Cache cleared successfully');
+      return { success: true, message: 'Cache cleared successfully' };
+      
+    } catch (error) {
+      this.logger.error(`Cache clear failed: ${error.message}`);
+      return { success: false, message: `Cache clear failed: ${error.message}` };
+    }
   }
 }
