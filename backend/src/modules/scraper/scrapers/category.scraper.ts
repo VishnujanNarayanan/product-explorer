@@ -16,45 +16,24 @@ export interface ProductPreview {
 @Injectable()
 export class CategoryScraper extends BaseScraper {
   private readonly SELECTORS = {
-    // More robust selectors
-    PRODUCT_GRID: '.plp-listing, .product-grid, [class*="product-grid"]',
-    PRODUCT_CARD: '.main-product-card, .product-card, [class*="product-card"]',
-    PRODUCT_TITLE: '.card__heading a, .product-title a, h3 a, [class*="title"] a',
-    PRODUCT_AUTHOR: '.author, .product-author, [class*="author"], .truncate-author',
-    PRODUCT_PRICE: '.price-item, .money, .product-price, [class*="price"]',
-    PRODUCT_IMAGE: 'img[src*="products"], .card__inner img, .product-image img',
-    LOAD_MORE: '#custom-load-more, .load-more, button:has-text("Load More"), [aria-label*="load more"]',
-    PRODUCT_COUNT: '.plp-listing__count, .product-count, .results-count',
+    // CORRECT selectors for World of Books
+    PRODUCT_GRID: '.plp-listing',
+    PRODUCT_CARD: '.main-product-card',
+    PRODUCT_TITLE: '.card__heading a',
+    PRODUCT_AUTHOR: '.truncate-author',
+    PRODUCT_PRICE: '.price-item',
+    PRODUCT_IMAGE: '.card__media img',
+    LOAD_MORE: '#custom-load-more',
   };
 
   async scrape(url: string, categorySlug: string, maxProducts: number = 100): Promise<ProductPreview[]> {
     const products: ProductPreview[] = [];
 
-    // @ts-ignore - Type issues with Crawlee v3
-    const crawler = new PlaywrightCrawler({
+    const crawler = new (PlaywrightCrawler as any)({
       maxRequestsPerCrawl: 50,
       maxConcurrency: 1,
-      requestHandlerTimeoutSecs: 120,
       
-      // @ts-ignore
-      failedRequestHandler: async ({ request, error }) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Request ${request.url} failed: ${errorMessage}`);
-      },
-      
-      launchContext: {
-        launchOptions: {
-          headless: true,
-        },
-      },
-      
-      useSessionPool: true,
-      persistCookiesPerSession: true,
-      maxRequestRetries: this.MAX_RETRIES,
-      retryOnBlocked: true,
-      
-      // @ts-ignore - Main handler
-      requestHandler: async ({ page, request }) => {
+      requestHandler: async ({ page, request }: any) => {
         this.logger.log(`Scraping category: ${categorySlug} from ${request.url}`);
         
         // Wait for product grid
@@ -62,14 +41,14 @@ export class CategoryScraper extends BaseScraper {
         await this.delay(2000);
         
         let totalProducts = 0;
-        const MAX_PAGES = 3; // Limit to 3 pages for demo
+        const MAX_LOAD_MORE_CLICKS = 5; // Limit clicks for demo
         
-        // Extract products with pagination
-        for (let pageNum = 1; pageNum <= MAX_PAGES && products.length < maxProducts; pageNum++) {
+        // Click "Load More" multiple times
+        for (let clickCount = 0; clickCount < MAX_LOAD_MORE_CLICKS; clickCount++) {
           try {
-            this.logger.log(`Processing page ${pageNum} for ${categorySlug}`);
+            this.logger.log(`Extracting page ${clickCount + 1} for ${categorySlug}`);
             
-            // Extract current page products
+            // Extract current products
             const pageProducts = await this.extractPageProducts(page, categorySlug);
             
             // Add new products
@@ -78,20 +57,24 @@ export class CategoryScraper extends BaseScraper {
                 products.push(product);
                 totalProducts++;
                 
-                if (totalProducts >= maxProducts) break;
+                if (totalProducts >= maxProducts) {
+                  this.logger.log(`Reached max products (${maxProducts})`);
+                  return;
+                }
               }
             }
             
-            // Try to load next page if not reached limit
-            if (totalProducts < maxProducts) {
-              const hasMore = await this.loadNextPage(page);
-              if (!hasMore) break;
-              
-              await this.delay(2000); // Wait for new products
+            // Try to click "Load More"
+            const hasMore = await this.clickLoadMore(page);
+            if (!hasMore) {
+              this.logger.log('No more products to load');
+              break;
             }
             
+            await this.delay(3000); // Wait for new products to load
+            
           } catch (error: any) {
-            this.logger.warn(`Page ${pageNum} failed: ${error.message}`);
+            this.logger.warn(`Page ${clickCount + 1} failed: ${error.message}`);
             break;
           }
         }
@@ -117,7 +100,7 @@ export class CategoryScraper extends BaseScraper {
     const products: ProductPreview[] = [];
     
     const productElements = await page.$$(this.SELECTORS.PRODUCT_CARD);
-    this.logger.debug(`Found ${productElements.length} products on page`);
+    this.logger.debug(`Found ${productElements.length} product cards on page`);
     
     for (const productEl of productElements) {
       try {
@@ -139,44 +122,31 @@ export class CategoryScraper extends BaseScraper {
     categorySlug: string
   ): Promise<ProductPreview | null> {
     try {
-      // Try multiple selector strategies
-      const title = await this.extractText(productEl, [
-        '.card__heading a',
-        '.product-title',
-        'h3 a',
-        '[class*="title"]'
-      ]);
+      // Title
+      const titleEl = await productEl.$(this.SELECTORS.PRODUCT_TITLE);
+      if (!titleEl) return null;
       
-      const author = await this.extractText(productEl, [
-        '.author',
-        '.product-author',
-        '[class*="author"]'
-      ]);
-      
-      const priceText = await this.extractText(productEl, [
-        '.price-item',
-        '.money',
-        '.product-price'
-      ]);
-      
-      const imageUrl = await this.extractAttribute(productEl, 'src', [
-        'img[src*="products"]',
-        '.card__inner img',
-        '.product-image img',
-        'img'
-      ]);
-      
-      const productUrl = await this.extractAttribute(productEl, 'href', [
-        '.card__heading a',
-        '.product-title a',
-        'a[href*="/products/"]'
-      ]);
+      const title = await titleEl.textContent();
+      const productUrl = await titleEl.getAttribute('href');
       
       if (!title || !productUrl) return null;
       
+      // Author
+      const authorEl = await productEl.$(this.SELECTORS.PRODUCT_AUTHOR);
+      const author = authorEl ? await authorEl.textContent() : 'Unknown';
+      
+      // Price
+      const priceEl = await productEl.$(this.SELECTORS.PRODUCT_PRICE);
+      const priceText = priceEl ? await priceEl.textContent() : '';
+      const { amount: price, currency } = this.normalizePrice(priceText || '');
+      
+      // Image
+      const imageEl = await productEl.$(this.SELECTORS.PRODUCT_IMAGE);
+      const imageUrl = imageEl ? await imageEl.getAttribute('src') : '';
+      
+      // Source ID
       const sourceId = this.extractSourceId(productUrl);
       const fullUrl = productUrl.startsWith('http') ? productUrl : `https://www.worldofbooks.com${productUrl}`;
-      const { amount: price, currency } = this.normalizePrice(priceText || '');
       
       return {
         source_id: sourceId,
@@ -194,91 +164,49 @@ export class CategoryScraper extends BaseScraper {
   }
 
   /**
-   * Try multiple selectors for text extraction
+   * Click Load More button
    */
-  private async extractText(element: any, selectors: string[]): Promise<string | null> {
-    for (const selector of selectors) {
-      try {
-        const el = await element.$(selector);
-        if (el) {
-          const text = await el.textContent();
-          if (text?.trim()) return text.trim();
-        }
-      } catch (error) {
-        continue;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Try multiple selectors for attribute extraction
-   */
-  private async extractAttribute(element: any, attribute: string, selectors: string[]): Promise<string | null> {
-    for (const selector of selectors) {
-      try {
-        const el = await element.$(selector);
-        if (el) {
-          const value = await el.getAttribute(attribute);
-          if (value) return value;
-        }
-      } catch (error) {
-        continue;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Load next page of products
-   */
-  private async loadNextPage(page: any): Promise<boolean> {
+  private async clickLoadMore(page: any): Promise<boolean> {
     try {
-      // Try multiple load more button selectors
-      const loadMoreSelectors = [
-        '#custom-load-more',
-        '.load-more',
-        'button:has-text("Load More")',
-        '[aria-label*="load more"]'
-      ];
-      
-      for (const selector of loadMoreSelectors) {
-        const button = await page.$(selector);
-        if (button) {
-          await button.scrollIntoViewIfNeeded();
-          await this.delay(500);
-          
-          // Click via JavaScript to avoid blocking
-          await page.evaluate((sel) => {
-            const btn = document.querySelector(sel);
-            if (btn) (btn as HTMLElement).click();
-          }, selector);
-          
-          this.logger.debug(`Clicked load more: ${selector}`);
-          return true;
-        }
+      const loadMoreBtn = await page.$(this.SELECTORS.LOAD_MORE);
+      if (!loadMoreBtn) {
+        this.logger.debug('Load More button not found');
+        return false;
       }
       
-      // Check for pagination links
-      const nextLink = await page.$('a[rel="next"], .pagination__next, a:has-text("Next")');
-      if (nextLink) {
-        await nextLink.click();
-        this.logger.debug('Clicked next page link');
-        return true;
+      // Check if button is visible and enabled
+      const isVisible = await loadMoreBtn.evaluate((el: any) => {
+        return el.offsetParent !== null && !el.disabled;
+      });
+      
+      if (!isVisible) {
+        this.logger.debug('Load More button not visible or disabled');
+        return false;
       }
+      
+      // Scroll to button
+      await loadMoreBtn.scrollIntoViewIfNeeded();
+      await this.delay(500);
+      
+      // Click via JavaScript to avoid blocking
+      await page.evaluate((btn: any) => {
+        btn.click();
+      }, loadMoreBtn);
+      
+      this.logger.debug('Clicked Load More button');
+      return true;
       
     } catch (error) {
-      this.logger.debug('No more pages or failed to load next page');
+      this.logger.debug('Failed to click Load More:', error.message);
+      return false;
     }
-    
-    return false;
   }
 
   /**
-   * Improved source ID generation
+   * Extract source ID from product URL
    */
   private extractSourceId(url: string): string {
-    // Extract ISBN
+    // Extract ISBN from URL
     const isbnMatch = url.match(/\b\d{10,13}\b/);
     if (isbnMatch) return `WOB-ISBN-${isbnMatch[0]}`;
     
@@ -286,16 +214,13 @@ export class CategoryScraper extends BaseScraper {
     const urlObj = new URL(url.startsWith('http') ? url : `https://www.worldofbooks.com${url}`);
     const pathParts = urlObj.pathname.split('/').filter(p => p);
     
-    // Get product slug (last non-empty part)
-    for (let i = pathParts.length - 1; i >= 0; i--) {
-      if (pathParts[i] && 
-          !['en-gb', 'collections', 'products', 'pages'].includes(pathParts[i]) &&
-          pathParts[i].length > 3) {
-        return `WOB-${pathParts[i]}`;
-      }
+    // Get product slug
+    const productSlug = pathParts[pathParts.length - 1];
+    if (productSlug && productSlug.length > 3) {
+      return `WOB-${productSlug}`;
     }
     
     // Fallback: hash of URL
-    return `WOB-${Buffer.from(url).toString('base64').substring(0, 15).replace(/[^a-zA-Z0-9]/g, '')}`;
+    return `WOB-${Buffer.from(url).toString('base64').substring(0, 15)}`;
   }
 }

@@ -1,0 +1,16 @@
+{
+  "navigation": [
+    { "id": 1, "title": "Fiction Books", "slug": "fiction-books" },
+    { "id": 2, "title": "Non-Fiction Books", "slug": "non-fiction-books" }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "source_id": "WOB-001",
+      "title": "Test Book",
+      "price": "12.99",
+      "currency": "GBP",
+      "image_url": "https://via.placeholder.com/150"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
+import { In, Not } from 'typeorm';
 
 import { NavigationScraper } from './scrapers/navigation.scraper';
 import { CategoryScraper } from './scrapers/category.scraper';
@@ -51,7 +52,6 @@ export class ScraperService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Initialize with default navigation if empty
     const count = await this.navigationRepo.count();
     if (count === 0) {
       await this.scrapeAndSaveNavigation();
@@ -77,7 +77,6 @@ export class ScraperService implements OnModuleInit {
 
       const { navigation, categories } = await this.navigationScraper.scrape(this.BASE_URL);
       
-      // Save navigation items
       const savedNavigation: Navigation[] = [];
       for (const navItem of navigation) {
         const existing = await this.navigationRepo.findOne({ where: { slug: navItem.slug } });
@@ -97,7 +96,6 @@ export class ScraperService implements OnModuleInit {
         }
       }
 
-      // Save categories with relationships
       for (const categoryItem of categories) {
         const parentNav = await this.navigationRepo.findOne({ 
           where: { slug: categoryItem.parentSlug } 
@@ -126,7 +124,6 @@ export class ScraperService implements OnModuleInit {
         finished_at: new Date(),
       });
 
-      // Cache for 24 hours
       await this.cacheManager.set(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
 
       this.logger.log(`Navigation scraping completed: ${savedNavigation.length} nav items, ${categories.length} categories saved`);
@@ -164,21 +161,18 @@ export class ScraperService implements OnModuleInit {
       throw new Error(`Category not found: ${slug}`);
     }
 
-    // Queue scraping job
     await this.scrapingQueue.add('scrape-category', {
       categorySlug: slug,
       categoryId: category.id,
       url: `${this.BASE_URL}/collections/${slug}`,
     });
 
-    // Return existing products immediately
     const products = await this.productRepo.find({
       where: { category: { id: category.id } },
       relations: ['category'],
-      take: 50 // Limit for API response
+      take: 50
     });
 
-    // Cache for 1 hour
     await this.cacheManager.set(cacheKey, products, 60 * 60 * 1000);
     
     return {
@@ -200,7 +194,6 @@ export class ScraperService implements OnModuleInit {
     }
 
     try {
-      // KEEP the relations - should work now with fixed entity
       const product = await this.productRepo.findOne({ 
         where: { source_id: sourceId },
         relations: ['detail', 'reviews', 'category'],
@@ -211,7 +204,6 @@ export class ScraperService implements OnModuleInit {
         return null;
       }
 
-      // Always queue detail scrape if missing details or force refresh
       if (forceRefresh || !product.detail) {
         await this.scrapingQueue.add('scrape-product-detail', {
           productId: product.id,
@@ -220,7 +212,6 @@ export class ScraperService implements OnModuleInit {
         });
       }
 
-      // Cache for 24 hours
       await this.cacheManager.set(cacheKey, product, 24 * 60 * 60 * 1000);
       
       return product;
@@ -245,7 +236,6 @@ export class ScraperService implements OnModuleInit {
     try {
       switch (type) {
         case 'navigation':
-          // Use the target as URL or default to BASE_URL
           const url = target || this.BASE_URL;
           await this.scrapingQueue.add('scrape-navigation', { 
             jobId: job.id,
@@ -294,7 +284,6 @@ export class ScraperService implements OnModuleInit {
         jobId: job.id
       };
     } catch (error) {
-      // Update job status to failed
       await this.scrapeJobRepo.update(job.id, {
         status: 'failed',
         finished_at: new Date(),
@@ -308,52 +297,85 @@ export class ScraperService implements OnModuleInit {
   async getScrapeJobStatus(jobId: number): Promise<ScrapeJob> {
     return this.scrapeJobRepo.findOne({ where: { id: jobId } }) as Promise<ScrapeJob>;
   }
+
   async cleanupOldData(): Promise<{ deleted: number; message: string }> {
     try {
-      // First, delete categories linked to old navigation
-      const keepNavigationTitles = [
-        'Clearance',
-        'eGift Cards',
-        'Fiction Books',
-        'Non-Fiction Books',
-        'Children\'s Books',
-        'Rare Books',
-        'Music & Film',
-        'Sell Your Books'
-      ];
+      // Get IDs of the 8 CORRECT navigation items
+      const correctNavigation = await this.navigationRepo.find({
+        where: [
+          { title: 'Clearance' },
+          { title: 'eGift Cards' },
+          { title: 'Fiction Books' },
+          { title: 'Non-Fiction Books' },
+          { title: 'Children\'s Books' },
+          { title: 'Rare Books' },
+          { title: 'Music & Film' },
+          { title: 'Sell Your Books' }
+        ]
+      });
 
-      // Get IDs of navigation items to keep
-      const keepNavigation = await this.navigationRepo
-        .createQueryBuilder('nav')
-        .select('nav.id')
-        .where('nav.title IN (:...titles)', { titles: keepNavigationTitles })
-        .getMany();
-
-      const keepIds = keepNavigation.map(nav => nav.id);
-
-      // 1. Delete categories that don't have valid navigation parent
-      const deletedCategories = await this.categoryRepo
-        .createQueryBuilder()
-        .delete()
-        .where('navigation_id NOT IN (:...ids)', { ids: keepIds.length > 0 ? keepIds : [0] })
-        .execute();
-
-      // 2. Delete old navigation items
-      const deletedNavigation = await this.navigationRepo
-        .createQueryBuilder()
-        .delete()
-        .where('title NOT IN (:...titles)', { titles: keepNavigationTitles })
-        .execute();
-
-      const totalDeleted = (deletedCategories.affected || 0) + (deletedNavigation.affected || 0);
+      const correctIds = correctNavigation.map(nav => nav.id);
       
-      this.logger.log(`Cleaned up ${totalDeleted} items (${deletedCategories.affected || 0} categories, ${deletedNavigation.affected || 0} navigation)`);
+      if (correctIds.length === 0) {
+        return { deleted: 0, message: 'No correct navigation items found' };
+      }
+
+      let totalDeleted = 0;
+      const messages: string[] = [];
+
+      // Use TypeORM queries instead of raw SQL to avoid table name issues
+      // Delete products linked to wrong categories
+      const wrongProducts = await this.productRepo.find({
+        relations: ['category', 'category.navigation'],
+        where: [
+          { category: { navigation: { id: Not(In(correctIds)) } } },
+          { category: null } // Also delete orphaned products
+        ]
+      });
+
+      if (wrongProducts.length > 0) {
+        await this.productRepo.remove(wrongProducts);
+        totalDeleted += wrongProducts.length;
+        messages.push(`${wrongProducts.length} products`);
+      }
+
+      // Delete categories linked to wrong navigation
+      const wrongCategories = await this.categoryRepo.find({
+        relations: ['navigation'],
+        where: [
+          { navigation: { id: Not(In(correctIds)) } },
+          { navigation: null } // Also delete orphaned categories
+        ]
+      });
+
+      if (wrongCategories.length > 0) {
+        await this.categoryRepo.remove(wrongCategories);
+        totalDeleted += wrongCategories.length;
+        messages.push(`${wrongCategories.length} categories`);
+      }
+
+      // Delete wrong navigation items
+      const wrongNavigation = await this.navigationRepo.find({
+        where: { id: Not(In(correctIds)) }
+      });
+
+      if (wrongNavigation.length > 0) {
+        await this.navigationRepo.remove(wrongNavigation);
+        totalDeleted += wrongNavigation.length;
+        messages.push(`${wrongNavigation.length} navigation`);
+      }
+
+      const message = totalDeleted > 0 
+        ? `Cleaned up ${totalDeleted} items (${messages.join(', ')})`
+        : 'No items to clean up';
+      
+      this.logger.log(`Cleanup: ${message}`);
       
       return {
         deleted: totalDeleted,
-        message: `Cleaned up ${totalDeleted} items (${deletedCategories.affected || 0} categories, ${deletedNavigation.affected || 0} navigation)`
+        message
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Cleanup failed: ${error.message}`);
       return {
         deleted: 0,
@@ -364,7 +386,6 @@ export class ScraperService implements OnModuleInit {
 
   async clearCache(): Promise<{ success: boolean; message: string }> {
     try {
-      // Try different cache clearing methods
       const cache = this.cacheManager as any;
       
       if (cache.store?.reset) {
@@ -374,13 +395,11 @@ export class ScraperService implements OnModuleInit {
       } else if (cache.store?.clear) {
         await cache.store.clear();
       } else {
-        // Manual cache key clearing for known keys
         const knownKeys = ['navigation_data'];
         for (const key of knownKeys) {
           await this.cacheManager.del(key);
         }
         
-        // Clear category and product caches
         const categories = await this.categoryRepo.find();
         for (const category of categories) {
           await this.cacheManager.del(`category_${category.slug}`);

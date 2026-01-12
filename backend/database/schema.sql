@@ -1,22 +1,13 @@
--- Drop tables if they exist (for clean setup)
-DROP TABLE IF EXISTS review CASCADE;
-DROP TABLE IF EXISTS product_detail CASCADE;
-DROP TABLE IF EXISTS product CASCADE;
-DROP TABLE IF EXISTS category CASCADE;
-DROP TABLE IF EXISTS navigation CASCADE;
-DROP TABLE IF EXISTS scrape_job CASCADE;
-DROP TABLE IF EXISTS view_history CASCADE;
-
--- Navigation table
-CREATE TABLE navigation (
+-- backend/database/schema.sql
+-- Create tables with IF NOT EXISTS for idempotent setup
+CREATE TABLE IF NOT EXISTS navigation (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   slug VARCHAR(255) UNIQUE NOT NULL,
   last_scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Category table
-CREATE TABLE category (
+CREATE TABLE IF NOT EXISTS category (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   slug VARCHAR(255) UNIQUE NOT NULL,
@@ -26,8 +17,7 @@ CREATE TABLE category (
   parent_id INTEGER REFERENCES category(id)
 );
 
--- Product table
-CREATE TABLE product (
+CREATE TABLE IF NOT EXISTS product (
   id SERIAL PRIMARY KEY,
   source_id VARCHAR(255) UNIQUE NOT NULL,
   title TEXT NOT NULL,
@@ -39,8 +29,7 @@ CREATE TABLE product (
   category_id INTEGER REFERENCES category(id)
 );
 
--- Product detail table
-CREATE TABLE product_detail (
+CREATE TABLE IF NOT EXISTS product_detail (
   product_id INTEGER PRIMARY KEY REFERENCES product(id),
   description TEXT NOT NULL,
   specs JSONB,
@@ -48,8 +37,7 @@ CREATE TABLE product_detail (
   reviews_count INTEGER DEFAULT 0
 );
 
--- Review table
-CREATE TABLE review (
+CREATE TABLE IF NOT EXISTS review (
   id SERIAL PRIMARY KEY,
   author VARCHAR(255) NOT NULL,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
@@ -58,8 +46,7 @@ CREATE TABLE review (
   product_id INTEGER REFERENCES product(id)
 );
 
--- Scrape job table
-CREATE TABLE scrape_job (
+CREATE TABLE IF NOT EXISTS scrape_job (
   id SERIAL PRIMARY KEY,
   target_url TEXT NOT NULL,
   target_type VARCHAR(50) NOT NULL,
@@ -69,8 +56,7 @@ CREATE TABLE scrape_job (
   error_log TEXT
 );
 
--- View history table
-CREATE TABLE view_history (
+CREATE TABLE IF NOT EXISTS view_history (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR(255),
   session_id VARCHAR(255) NOT NULL,
@@ -78,31 +64,80 @@ CREATE TABLE view_history (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Indexes for performance
-CREATE INDEX idx_product_source_id ON product(source_id);
-CREATE INDEX idx_product_category ON product(category_id);
-CREATE INDEX idx_product_last_scraped ON product(last_scraped_at);
-CREATE INDEX idx_category_slug ON category(slug);
-CREATE INDEX idx_category_parent ON category(parent_id);
-CREATE INDEX idx_review_product ON review(product_id);
-CREATE INDEX idx_scrape_job_status ON scrape_job(status);
-CREATE INDEX idx_view_history_session ON view_history(session_id);
-CREATE INDEX idx_view_history_created ON view_history(created_at);
+-- Create indexes if they don't exist
+DO $$ 
+BEGIN
+  -- Product indexes
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_product_source_id') THEN
+    CREATE INDEX idx_product_source_id ON product(source_id);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_product_category') THEN
+    CREATE INDEX idx_product_category ON product(category_id);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_product_last_scraped') THEN
+    CREATE INDEX idx_product_last_scraped ON product(last_scraped_at);
+  END IF;
+  
+  -- Category indexes
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_category_slug') THEN
+    CREATE INDEX idx_category_slug ON category(slug);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_category_parent') THEN
+    CREATE INDEX idx_category_parent ON category(parent_id);
+  END IF;
+  
+  -- Review indexes
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_review_product') THEN
+    CREATE INDEX idx_review_product ON review(product_id);
+  END IF;
+  
+  -- Scrape job indexes
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_scrape_job_status') THEN
+    CREATE INDEX idx_scrape_job_status ON scrape_job(status);
+  END IF;
+  
+  -- View history indexes
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_view_history_session') THEN
+    CREATE INDEX idx_view_history_session ON view_history(session_id);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_view_history_created') THEN
+    CREATE INDEX idx_view_history_created ON view_history(created_at);
+  END IF;
+END $$;
 
--- Insert fallback data for testing
+-- Insert CORRECT fallback data (8 navigation items as per World of Books)
 INSERT INTO navigation (title, slug) VALUES 
-  ('Books', 'books'),
+  ('Clearance', 'clearance'),
+  ('eGift Cards', 'egift-cards'),
+  ('Fiction Books', 'fiction-books'),
+  ('Non-Fiction Books', 'non-fiction-books'),
   ('Children''s Books', 'childrens-books'),
-  ('Fiction', 'fiction'),
-  ('Non-Fiction', 'non-fiction');
+  ('Rare Books', 'rare-books'),
+  ('Music & Film', 'music-film'),
+  ('Sell Your Books', 'sell-your-books')
+ON CONFLICT (slug) DO UPDATE SET title = EXCLUDED.title;
 
+-- Insert fallback categories for Fiction Books (as example)
 INSERT INTO category (title, slug, navigation_id) VALUES
-  ('Fiction', 'fiction', 1),
-  ('Non-Fiction', 'non-fiction', 1),
-  ('Picture Books', 'picture-books', 2),
-  ('Young Adult', 'young-adult', 2);
+  ('Crime & Mystery', 'crime-mystery', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
+  ('Fantasy', 'fantasy', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
+  ('Science Fiction', 'science-fiction', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
+  ('Romance', 'romance', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
+  ('Horror & Ghost Stories', 'horror', (SELECT id FROM navigation WHERE slug = 'fiction-books'))
+ON CONFLICT (slug) DO UPDATE SET title = EXCLUDED.title, navigation_id = EXCLUDED.navigation_id;
 
+-- Insert fallback products
 INSERT INTO product (source_id, title, price, currency, image_url, source_url, category_id) VALUES
-  ('WOB-001', 'The Great Gatsby', 12.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/book1', 1),
-  ('WOB-002', 'The Very Hungry Caterpillar', 8.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/book2', 3),
-  ('WOB-003', 'Sapiens: A Brief History of Humankind', 14.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/book3', 2);
+  ('WOB-001', 'The Great Gatsby', 12.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-great-gatsby', (SELECT id FROM category WHERE slug = 'crime-mystery')),
+  ('WOB-002', 'The Very Hungry Caterpillar', 8.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-very-hungry-caterpillar', (SELECT id FROM category WHERE slug = 'fantasy')),
+  ('WOB-003', 'Sapiens: A Brief History of Humankind', 14.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/sapiens', (SELECT id FROM category WHERE slug = 'science-fiction'))
+ON CONFLICT (source_id) DO UPDATE SET 
+  title = EXCLUDED.title,
+  price = EXCLUDED.price,
+  image_url = EXCLUDED.image_url,
+  source_url = EXCLUDED.source_url,
+  category_id = EXCLUDED.category_id;
