@@ -20,7 +20,7 @@ export const navigationAPI = {
   getCategory: (slug: string) => 
     api.get<Category>(`/categories/${slug}`),
   
-  // Get category products (triggers scrape if needed)
+  // Get category products (triggers scrape if needed) - same as productsAPI.getProductsByCategory
   getCategoryProducts: (slug: string) => 
     api.get<{
       message: string;
@@ -29,7 +29,12 @@ export const navigationAPI = {
       jobQueued: boolean;
     }>(`/categories/${slug}/products`),
   
-  // Trigger category scrape
+  // Trigger category scrape (POST endpoint for manual trigger)
   scrapeCategory: (slug: string) => 
-    api.post(`/scrape/category/${slug}`),
+    api.post<{
+      message: string;
+      products: any[];
+      category?: Category;
+      jobQueued: boolean;
+    }>(`/scrape/category/${slug}`),
 };

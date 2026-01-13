@@ -1,23 +1,23 @@
+// backend/src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Enable CORS for frontend
+
+  // Enable WebSockets
+  app.useWebSocketAdapter(new IoAdapter(app));
+
+  // Enable CORS for BOTH frontend ports
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    origin: ['http://localhost:3000', 'http://localhost:3001'], // ← ADD 3001 HERE
     credentials: true,
   });
-  
-  // REMOVED: app.setGlobalPrefix('api');
-  // Your CoreController already has @Controller('api')
-  // This was causing double /api/api prefix
-  
-  const port = process.env.PORT ?? 3001;
+
+  const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`✅ Backend running on: http://localhost:${port}`);
-  console.log(`📡 Test endpoint: http://localhost:${port}/api/navigation`);
+  console.log(`Application is running on: http://localhost:${port}`);
 }
+
 bootstrap();

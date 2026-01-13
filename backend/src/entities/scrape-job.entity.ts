@@ -22,4 +22,10 @@ export class ScrapeJob {
 
   @Column({ type: 'text', nullable: true })
   error_log: string;
+
+  @Column({ nullable: true })
+  result_count?: number;
+
+  @Column({ default: 'medium' })
+  priority?: string;
 }

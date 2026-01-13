@@ -21,10 +21,20 @@ export function ProductGrid({
 }: ProductGridProps) {
   if (isLoading && !products.length) {
     return (
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-80 animate-pulse rounded-lg bg-muted" />
-        ))}
+      <div className="space-y-6">
+        {title && (
+          <h2 className="text-2xl font-bold">{title}</h2>
+        )}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="space-y-4">
+              <div className="aspect-square rounded-lg bg-muted animate-pulse" />
+              <div className="h-4 bg-muted rounded animate-pulse" />
+              <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
+              <div className="h-8 bg-muted rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -42,15 +52,15 @@ export function ProductGrid({
       {title && (
         <h2 className="mb-6 text-2xl font-bold">{title}</h2>
       )}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
       {showLoadMore && hasMore && (
-        <div className="mt-8 text-center">
-          <Button onClick={onLoadMore} disabled={isLoading}>
-            {isLoading ? "Loading..." : "Load More"}
+        <div className="mt-8 flex justify-center">
+          <Button onClick={onLoadMore} size="lg" variant="outline">
+            Load More Products
           </Button>
         </div>
       )}

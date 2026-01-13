@@ -11,9 +11,9 @@ export interface CategoryProductsResponse {
 }
 
 export const productsAPI = {
-  // CORRECTED ENDPOINT: Use /scrape/category/{slug}
+  // Get category products (triggers scrape if needed) - uses same endpoint as navigationAPI
   getProductsByCategory: (categorySlug: string) => 
-    api.get<CategoryProductsResponse>(`/scrape/category/${categorySlug}`),
+    api.get<CategoryProductsResponse>(`/categories/${categorySlug}/products`),
   
   // Get all products (fallback to all categories)
   getAllProducts: () => 

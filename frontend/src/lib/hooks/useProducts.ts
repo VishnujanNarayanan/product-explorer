@@ -10,31 +10,18 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast(); // Add toast hook
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (): Promise<{ jobQueued: boolean }> => {
     setIsLoading(true);
     setError(null);
     try {
       let loadedProducts: Product[] = [];
-      let scrapingStarted = false;
+      let jobQueued = false;
       
       if (categorySlug) {
-        // Use the category products endpoint - CORRECTED ENDPOINT
+        // Use the category products endpoint
         const response = await productsAPI.getProductsByCategory(categorySlug);
         loadedProducts = response.products || [];
-        scrapingStarted = response.jobQueued || false;
-        
-        // Show toast if scraping started
-        if (scrapingStarted && loadedProducts.length === 0) {
-          toast({
-            title: "Scraping Started",
-            description: "Products are being scraped. Please wait...",
-          });
-          
-          // Auto-retry after 10 seconds
-          setTimeout(() => {
-            loadProducts();
-          }, 10000);
-        }
+        jobQueued = response.jobQueued || false;
       } else {
         // Fallback to all products
         const response = await productsAPI.getAllProducts();
@@ -79,12 +66,14 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
       }
       
       setProducts(filteredProducts);
+      return { jobQueued };
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load products'));
+      return { jobQueued: false };
     } finally {
       setIsLoading(false);
     }
-  }, [categorySlug, filters, toast]); // Add toast to dependencies
+  }, [categorySlug, filters]);
 
   const search = useCallback((query: string, newFilters?: ProductFilters) => {
     if (newFilters) setFilters(newFilters);
@@ -112,41 +101,24 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
     }
   }, [toast]); // Add toast dependency
 
-  const refreshCategory = useCallback(async () => {
-    if (!categorySlug) return;
+  const refreshCategory = useCallback(async (): Promise<{ jobQueued: boolean }> => {
+    if (!categorySlug) return { jobQueued: false };
     
     try {
       setIsLoading(true);
-      toast({
-        title: "Refreshing Category",
-        description: "Starting category refresh...",
-      });
       
       // This will trigger scraping
       const response = await productsAPI.getProductsByCategory(categorySlug);
       setProducts(response.products || []);
       
-      if (response.jobQueued) {
-        toast({
-          title: "Scraping Started",
-          description: "Products are being scraped in the background.",
-        });
-        
-        // Auto-refresh after 10 seconds
-        setTimeout(() => {
-          loadProducts();
-        }, 10000);
-      }
+      return { jobQueued: response.jobQueued || false };
     } catch (error) {
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to refresh category",
-        variant: "destructive"
-      });
+      setError(error instanceof Error ? error : new Error('Failed to refresh category'));
+      return { jobQueued: false };
     } finally {
       setIsLoading(false);
     }
-  }, [categorySlug, loadProducts, toast]);
+  }, [categorySlug]);
 
   return {
     products,

@@ -161,9 +161,13 @@ export class ScraperService implements OnModuleInit {
       throw new Error(`Category not found: ${slug}`);
     }
 
+    // Get navigation slug for proper site navigation
+    const navigationSlug = category.navigation?.slug || null;
+
     await this.scrapingQueue.add('scrape-category', {
       categorySlug: slug,
       categoryId: category.id,
+      navigationSlug: navigationSlug,
       url: `${this.BASE_URL}/collections/${slug}`,
     });
 

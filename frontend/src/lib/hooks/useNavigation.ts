@@ -16,7 +16,13 @@ export const useNavigation = () => {
   const refreshNavigation = async () => {
     try {
       const result = await navigationAPI.scrapeNavigation();
-      mutate(result.data, false); // Update cache without revalidation
+      // Update the cache with new data from the response
+      if (result.data && Array.isArray(result.data)) {
+        mutate(result.data, false); // Update cache without revalidation
+      } else {
+        // If response doesn't have data, revalidate from the server
+        mutate();
+      }
       return result;
     } catch (error) {
       console.error('Failed to refresh navigation:', error);

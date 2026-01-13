@@ -10,6 +10,7 @@ import { Product } from './entities/product.entity';
 import { ProductDetail } from './entities/product-detail.entity';
 import { Review } from './entities/review.entity';
 import { ScrapeJob } from './entities/scrape-job.entity';
+import { ScraperSession } from './entities/scraper-session.entity';
 import { ViewHistory } from './entities/view-history.entity';
 import { CoreModule } from './modules/core/core.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
@@ -24,7 +25,7 @@ import { ScraperModule } from './modules/scraper/scraper.module';
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
       username: process.env.DB_USERNAME || 'admin',
-      password: process.env.DB_PASSWORD || 'password',
+      password: process.env.DB_USERNAME || 'password',
       database: process.env.DB_DATABASE || 'wob_explorer',
       entities: [
         Navigation,
@@ -33,6 +34,7 @@ import { ScraperModule } from './modules/scraper/scraper.module';
         ProductDetail,
         Review,
         ScrapeJob,
+        ScraperSession,
         ViewHistory,
       ],
       synchronize: process.env.NODE_ENV === 'development',
@@ -45,9 +47,9 @@ import { ScraperModule } from './modules/scraper/scraper.module';
       },
     }),
     CoreModule,
-    ScraperModule,
+    ScraperModule, // WebSocketGateway should be provided by ScraperModule
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService], // REMOVED WebSocketGateway from here
 })
 export class AppModule {}

@@ -80,8 +80,8 @@ export class ScrapeProcessor {
 
   @Process('scrape-category')
   async handleCategoryScrape(job: Job) {
-    const { categorySlug, categoryId, url, jobId } = job.data;
-    this.logger.log(`Processing category scrape: ${categorySlug}`);
+    const { categorySlug, categoryId, url, jobId, navigationSlug } = job.data;
+    this.logger.log(`Processing category scrape: ${categorySlug}${navigationSlug ? ` (via nav: ${navigationSlug})` : ''}`);
     
     try {
       if (jobId) {
@@ -91,8 +91,8 @@ export class ScrapeProcessor {
         });
       }
 
-      // Scrape products from category page
-      const products = await this.categoryScraper.scrape(url, categorySlug);
+      // Scrape products from category page, passing navigation context for proper site navigation
+      const products = await this.categoryScraper.scrape(url, categorySlug, 100, navigationSlug);
       
       // Get category entity
       const category = await this.categoryRepo.findOne({ where: { id: categoryId } });
