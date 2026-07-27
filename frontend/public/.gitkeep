@@ -1,0 +1,2 @@
+# Next.js serves this directory at the site root. Kept in git so the
+# Docker build has something to copy even when there are no static assets yet.

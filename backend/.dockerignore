@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+storage
+test
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*-debug.html
+*-debug.png
+*.log
