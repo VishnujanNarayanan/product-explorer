@@ -154,48 +154,10 @@ BEGIN
   END IF;
 END $$;
 
--- ========== FALLBACK DATA ==========
--- Insert CORRECT fallback data (8 navigation items as per World of Books)
-INSERT INTO navigation (title, slug) VALUES 
-  ('Clearance', 'clearance'),
-  ('eGift Cards', 'egift-cards'),
-  ('Fiction Books', 'fiction-books'),
-  ('Non-Fiction Books', 'non-fiction-books'),
-  ('Children''s Books', 'childrens-books'),
-  ('Rare Books', 'rare-books'),
-  ('Music & Film', 'music-film'),
-  ('Sell Your Books', 'sell-your-books')
-ON CONFLICT (slug) DO UPDATE SET title = EXCLUDED.title;
-
--- Insert fallback categories for Fiction Books (as example)
-INSERT INTO category (title, slug, navigation_id) VALUES
-  ('Crime & Mystery', 'crime-mystery', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
-  ('Fantasy', 'fantasy', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
-  ('Science Fiction', 'science-fiction', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
-  ('Romance', 'romance', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
-  ('Horror & Ghost Stories', 'horror', (SELECT id FROM navigation WHERE slug = 'fiction-books')),
-  ('Biographies', 'biographies', (SELECT id FROM navigation WHERE slug = 'non-fiction-books')),
-  ('History', 'history', (SELECT id FROM navigation WHERE slug = 'non-fiction-books')),
-  ('Art & Photography', 'art-photography', (SELECT id FROM navigation WHERE slug = 'non-fiction-books')),
-  ('Picture Books', 'picture-books', (SELECT id FROM navigation WHERE slug = 'childrens-books')),
-  ('Activity Books', 'activity-books', (SELECT id FROM navigation WHERE slug = 'childrens-books'))
-ON CONFLICT (slug) DO UPDATE SET title = EXCLUDED.title, navigation_id = EXCLUDED.navigation_id;
-
--- Insert fallback products
-INSERT INTO product (source_id, title, price, currency, image_url, source_url, category_id) VALUES
-  ('WOB-001', 'The Great Gatsby', 12.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-great-gatsby', (SELECT id FROM category WHERE slug = 'crime-mystery')),
-  ('WOB-002', 'The Very Hungry Caterpillar', 8.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-very-hungry-caterpillar', (SELECT id FROM category WHERE slug = 'fantasy')),
-  ('WOB-003', 'Sapiens: A Brief History of Humankind', 14.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/sapiens', (SELECT id FROM category WHERE slug = 'science-fiction')),
-  ('WOB-004', 'Harry Potter and the Philosopher''s Stone', 9.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/harry-potter', (SELECT id FROM category WHERE slug = 'fantasy')),
-  ('WOB-005', 'The Hobbit', 11.50, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-hobbit', (SELECT id FROM category WHERE slug = 'fantasy')),
-  ('WOB-006', '1984', 10.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/1984', (SELECT id FROM category WHERE slug = 'science-fiction')),
-  ('WOB-007', 'Pride and Prejudice', 7.99, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/pride-prejudice', (SELECT id FROM category WHERE slug = 'romance')),
-  ('WOB-008', 'The Shining', 13.25, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/the-shining', (SELECT id FROM category WHERE slug = 'horror')),
-  ('WOB-009', 'The Da Vinci Code', 8.50, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/da-vinci-code', (SELECT id FROM category WHERE slug = 'crime-mystery')),
-  ('WOB-010', 'A Brief History of Time', 12.75, 'GBP', 'https://via.placeholder.com/150', 'https://worldofbooks.com/en-gb/products/brief-history-time', (SELECT id FROM category WHERE slug = 'science-fiction'))
-ON CONFLICT (source_id) DO UPDATE SET 
-  title = EXCLUDED.title,
-  price = EXCLUDED.price,
-  image_url = EXCLUDED.image_url,
-  source_url = EXCLUDED.source_url,
-  category_id = EXCLUDED.category_id;
+-- ========== SEED DATA ==========
+-- Deliberately none here. This file only defines structure.
+--
+-- Sample data lives in backend/database/seed-data.json — real World of Books rows captured
+-- from the live site — and is loaded by `npm run seed`. Keeping it out of the init hook means
+-- the fixture can be refreshed without recreating the Postgres volume, and it keeps invented
+-- placeholder products out of a database that is otherwise entirely scraped.

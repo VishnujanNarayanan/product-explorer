@@ -9,6 +9,8 @@
     "build": "npx tsc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "npx ts-node src/main.ts",
+    "seed": "npx ts-node src/database/seed.ts",
+    "seed:prod": "node dist/database/seed.js",
     "start:dev": "npx ts-node-dev --respawn --transpile-only src/main.ts",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
