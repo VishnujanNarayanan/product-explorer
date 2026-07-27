@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Search, Home, BookOpen, ShoppingBag, User, LayoutGrid } from "lucide-react"
+import { Menu, Home, BookOpen, ShoppingBag, User, LayoutGrid } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { SearchBar } from "../shared/SearchBar"

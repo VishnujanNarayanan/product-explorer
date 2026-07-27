@@ -1,13 +1,12 @@
 "use client"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { FolderOpen, ArrowRight, Zap, Sparkles } from "lucide-react"
+import { FolderOpen, ArrowRight, Sparkles } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Category } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { useToast } from "@/lib/hooks/useToast"
-import { navigationAPI } from "@/lib/api/navigation"
 
 interface CategoryCardProps {
   category: Category

@@ -14,7 +14,7 @@ interface SearchBarProps {
 
 export function SearchBar({ className, onSearch }: SearchBarProps) {
   const [query, setQuery] = useState("")
-  const [isActive, setIsActive] = useState(false)
+  const [, setIsActive] = useState(false)
   const { toast } = useToast()
 
   const debouncedSearch = useDebounce((searchQuery: string) => {

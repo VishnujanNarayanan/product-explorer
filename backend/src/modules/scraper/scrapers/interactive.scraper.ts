@@ -101,7 +101,7 @@ export class InteractiveScraper extends BaseScraper {
     this.logger.log('Homepage loaded successfully');
   }
 
-  async hoverNavigation(page: playwright.Page, target: string, navigationSlug?: string): Promise<boolean> {
+  async hoverNavigation(page: playwright.Page, target: string, _navigationSlug?: string): Promise<boolean> {
     this.logger.log(`Attempting to hover over navigation: ${target}`);
     
     try {
@@ -224,7 +224,7 @@ export class InteractiveScraper extends BaseScraper {
               break;
             }
           }
-        } catch (error) {
+        } catch {
           // Skip failed products
         }
       }
@@ -339,7 +339,7 @@ export class InteractiveScraper extends BaseScraper {
           const description = await descriptionEl.textContent();
           details.description = description?.trim() || '';
         }
-      } catch (error) {
+      } catch {
         // Ignore
       }
       
@@ -362,7 +362,7 @@ export class InteractiveScraper extends BaseScraper {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Ignore
       }
       
@@ -405,7 +405,7 @@ export class InteractiveScraper extends BaseScraper {
     this.logger.log(`Starting interactive scrape for category: ${categorySlug}`);
     
     try {
-      const { browser, context, page } = await this.initializeBrowser();
+      const { browser, page } = await this.initializeBrowser();
       
       // Navigate to homepage first if navigation provided
       if (navigationSlug) {
@@ -471,7 +471,7 @@ export class InteractiveScraper extends BaseScraper {
       if (productSlug && productSlug.length > 3) {
         return `WOB-${productSlug}`;
       }
-    } catch (error) {
+    } catch {
       // Ignore URL parsing errors
     }
     

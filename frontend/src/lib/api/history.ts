@@ -1,4 +1,3 @@
-import { api } from './client';
 import { ViewHistory } from '../types';
 
 export const historyAPI = {

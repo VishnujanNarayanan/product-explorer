@@ -17,7 +17,7 @@ interface RelatedProductsProps {
 export function RelatedProducts({ productId, limit = 4 }: RelatedProductsProps) {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([])
   const [isLoadingRelated, setIsLoadingRelated] = useState(false)
-  const [currentProduct, setCurrentProduct] = useState<Product | null>(null)
+  const [, setCurrentProduct] = useState<Product | null>(null)
 
   useEffect(() => {
     loadRelatedProducts()

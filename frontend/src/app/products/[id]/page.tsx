@@ -7,7 +7,6 @@ import { ProductDescription } from "@/components/product-detail/ProductDescripti
 import { ProductReviews } from "@/components/product-detail/ProductReviews"
 import { RelatedProducts } from "@/components/product-detail/RelatedProducts"
 import { Breadcrumb } from "@/components/shared/Breadcrumb"
-import { useProductDetail } from "@/lib/hooks/useProductDetail"
 import { useToast } from "@/lib/hooks/useToast"
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary"

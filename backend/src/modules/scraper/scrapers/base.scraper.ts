@@ -56,7 +56,7 @@ export abstract class BaseScraper {
   }
 
   protected extractSlugFromUrl(url: string): string {
-    const cleanUrl = url.replace(/^https?:\/\/[^\/]+/, '').split('?')[0];
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
     const segments = cleanUrl.split('/').filter((s) => s.trim().length > 0);
     return segments.length > 0 ? segments[segments.length - 1] : 'home';
   }

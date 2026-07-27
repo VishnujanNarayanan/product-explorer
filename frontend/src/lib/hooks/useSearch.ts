@@ -1,15 +1,20 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Product } from '@/lib/types';
-import { debounce } from '@/lib/utils';
 
 const DEBOUNCE_DELAY = 300;
+const MAX_SUGGESTIONS = 5;
 
 export const useSearch = () => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  /**
+   * The query a suggestion was chosen for. Comparing it against the current query hides the
+   * list after a selection and re-opens it on the next keystroke, without needing an effect
+   * to reset a boolean.
+   */
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -41,7 +46,6 @@ export const useSearch = () => {
       }, DEBOUNCE_DELAY);
     } else {
       setDebouncedQuery('');
-      setSuggestions([]);
     }
 
     return () => {
@@ -51,31 +55,37 @@ export const useSearch = () => {
     };
   }, [query]);
 
-  // Client-side search
-  useEffect(() => {
-    if (debouncedQuery.trim() && allProducts.length > 0) {
-      const searchResults = allProducts.filter(product =>
-        product.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-        (product.detail?.description || '').toLowerCase().includes(debouncedQuery.toLowerCase())
-      ).slice(0, 5); // Limit to 5 suggestions
-      
-      setSuggestions(searchResults);
-    } else {
-      setSuggestions([]);
-    }
-  }, [debouncedQuery, allProducts]);
+  /**
+   * Suggestions are *derived* from the debounced query and the loaded products, so they are
+   * computed during render rather than pushed into state from an effect. The previous version
+   * kept them in state and set them synchronously inside an effect, which costs an extra
+   * render pass on every keystroke and leaves a frame where the list disagrees with the query.
+   */
+  const suggestions = useMemo(() => {
+    if (dismissedFor !== null && dismissedFor === query) return [];
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q || allProducts.length === 0) return [];
+
+    return allProducts
+      .filter(
+        (product) =>
+          product.title.toLowerCase().includes(q) ||
+          (product.detail?.description || '').toLowerCase().includes(q),
+      )
+      .slice(0, MAX_SUGGESTIONS);
+  }, [debouncedQuery, allProducts, dismissedFor, query]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
     setDebouncedQuery('');
-    setSuggestions([]);
     setIsSearching(false);
+    setDismissedFor(null);
   }, []);
 
   const selectSuggestion = useCallback((product: Product) => {
     setQuery(product.title);
-    setSuggestions([]);
     setIsSearching(false);
+    setDismissedFor(product.title);
   }, []);
 
   return {

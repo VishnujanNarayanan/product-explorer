@@ -25,9 +25,12 @@ export interface WebSocketResponse {
   };
 }
 
+/** Handler for a gateway event. Payload shape varies per event name. */
+type WebSocketCallback = (payload?: any) => void;
+
 class WebSocketClient {
   private socket: Socket | null = null;
-  private listeners: Map<string, Function[]> = new Map();
+  private listeners: Map<string, WebSocketCallback[]> = new Map();
   private sessionId: string | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -171,14 +174,14 @@ class WebSocketClient {
     });
   }
 
-  public on(event: string, callback: Function): void {
+  public on(event: string, callback: WebSocketCallback): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
     this.listeners.get(event)?.push(callback);
   }
 
-  public off(event: string, callback: Function): void {
+  public off(event: string, callback: WebSocketCallback): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       const index = callbacks.indexOf(callback);

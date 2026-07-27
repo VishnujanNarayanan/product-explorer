@@ -395,7 +395,7 @@ export class ScraperSessionService implements OnModuleDestroy {
     }
   }
 
-  private async updateProductWithDetails(sourceId: string, details: any): Promise<void> {
+  private async updateProductWithDetails(sourceId: string, _details: any): Promise<void> {
     // Implementation depends on your product detail structure
     this.logger.log(`Updating details for product ${sourceId}`);
   }

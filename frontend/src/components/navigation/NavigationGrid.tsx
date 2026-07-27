@@ -1,6 +1,5 @@
 import { NavigationCard } from "./NavigationCard"
 import { Navigation } from "@/lib/types"
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 
 interface NavigationGridProps {
   navigation: Navigation[]

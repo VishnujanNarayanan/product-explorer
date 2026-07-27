@@ -97,7 +97,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       const { target, action, categorySlug, navigationSlug } = event.payload;
 
       switch (action) {
-        case 'hover':
+        // Braced so the per-branch `const` is scoped to its own case rather than the whole
+        // switch, where it would sit in the temporal dead zone for the other branches.
+        case 'hover': {
           const hoverResult = await this.scraperSessionService.handleHover(
             sessionId,
             target,
@@ -111,8 +113,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             },
           });
           break;
+        }
 
-        case 'click':
+        case 'click': {
           if (!categorySlug) {
             throw new Error('categorySlug is required for click action');
           }
@@ -153,8 +156,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             },
           });
           break;
+        }
 
-        case 'paginate':
+        case 'paginate': {
           if (!categorySlug) {
             throw new Error('categorySlug is required for paginate action');
           }
@@ -193,6 +197,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             },
           });
           break;
+        }
       }
     } catch (error) {
       this.logger.error(`Navigate error for client ${client.id}:`, error);

@@ -50,7 +50,7 @@ export const productsAPI = {
     api.post<ScrapeProductResponse>(`/scrape/product/${sourceId}`, { refresh }),
   
   // Client-side search (since backend doesn't have search endpoint yet)
-  searchProducts: (query: string, filters?: ProductFilters) => {
+  searchProducts: (_query: string, _filters?: ProductFilters) => {
     // This is client-side filtering for now
     return {
       products: [] as Product[],
@@ -62,7 +62,7 @@ export const productsAPI = {
   },
   
   // Get product recommendations (client-side for now)
-  getRecommendations: (sourceId: string, limit = 6) => {
+  getRecommendations: (sourceId: string, _limit = 6) => {
     // Return empty array for now - can implement based on category
     return Promise.resolve([] as Product[]);
   },
