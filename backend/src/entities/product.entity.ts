@@ -14,6 +14,9 @@ export class Product {
   @Column()
   title: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  author: string | null;
+
   @Column('decimal', { precision: 10, scale: 2, nullable: true })
   price: number;
 

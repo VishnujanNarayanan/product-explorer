@@ -16,6 +16,18 @@ export class Category {
   @Column({ name: 'product_count', default: 0 })
   product_count: number;
 
+  /**
+   * Listing checkpoint. Products are filled in gradually: each scrape resumes from the page
+   * after this one, so re-opening a category continues where the last run stopped instead of
+   * re-fetching from the beginning.
+   */
+  @Column({ name: 'last_page_scraped', default: 0 })
+  last_page_scraped: number;
+
+  /** Set once a short page proves the collection has no further products. */
+  @Column({ name: 'is_exhausted', default: false })
+  is_exhausted: boolean;
+
   @Column({ name: 'last_scraped_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   last_scraped_at: Date;
 

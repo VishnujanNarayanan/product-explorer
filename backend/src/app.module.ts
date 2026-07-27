@@ -19,13 +19,15 @@ import { ScraperModule } from './modules/scraper/scraper.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // .env lives at the repo root, one level above backend/ (the cwd for npm scripts)
+      envFilePath: ['.env', '../.env'],
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
       username: process.env.DB_USERNAME || 'admin',
-      password: process.env.DB_USERNAME || 'password',
+      password: process.env.DB_PASSWORD || 'password',
       database: process.env.DB_DATABASE || 'wob_explorer',
       entities: [
         Navigation,
