@@ -33,7 +33,11 @@ export class NavigationScraper extends BaseScraper {
     GROUP_ITEM: 'li.has-submenu',
     GROUP_LINK: 'a[data-menu_category]',
     SUBMENU: '.onstate-mega-menu__submenu',
-    COLLECTION_LINK: 'a[href*="/collections/"]',
+    // Every submenu entry carries data-menu_subcategory, whether it points at a collection
+    // or a /pages/ landing page. Matching on the attribute rather than on "/collections/"
+    // keeps the sidebar in step with the site — filtering by href silently dropped 8-9
+    // visible entries per section (Romance, Graphic Novels, Music, Travel, ...).
+    SUBMENU_LINK: 'a[data-menu_subcategory]',
     COOKIE_ACCEPT: '#onetrust-accept-btn-handler',
   };
 
@@ -90,11 +94,16 @@ export class NavigationScraper extends BaseScraper {
             const children: any[] = [];
             const submenu = (li as Element).querySelector(S.SUBMENU);
             if (submenu) {
-              for (const a of Array.from(submenu.querySelectorAll(S.COLLECTION_LINK))) {
-                const href = (a as Element).getAttribute('href') || '';
-                const text = ((a as Element).textContent || '').trim().replace(/\s+/g, ' ');
-                if (!text || !href.includes('/collections/')) continue;
-                children.push({ title: text, href });
+              for (const a of Array.from(submenu.querySelectorAll(S.SUBMENU_LINK))) {
+                const el = a as Element;
+                const href = el.getAttribute('href') || '';
+                // The label attribute is the site's own wording; textContent may carry an
+                // emoji prefix ("🔥 Trending Books").
+                const text = (el.getAttribute('data-menu_subcategory') || el.textContent || '')
+                  .trim()
+                  .replace(/\s+/g, ' ');
+                if (!text || !href) continue;
+                children.push({ title: text, href, isCollection: href.includes('/collections/') });
               }
             }
 
@@ -175,7 +184,7 @@ export class NavigationScraper extends BaseScraper {
       const count = await page.evaluate((S: any) => {
         const root = document.querySelector(S.MENU_ROOT);
         if (!root) return 0;
-        return root.querySelectorAll(S.COLLECTION_LINK).length;
+        return root.querySelectorAll(S.SUBMENU_LINK).length;
       }, this.SELECTORS);
 
       if (count > 0 && count === previous) {

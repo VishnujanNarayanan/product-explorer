@@ -28,13 +28,20 @@ interface ActiveSession {
   currentUrl: string;
   categorySlug?: string;
   productsScraped: number;
+  /** Last page of the collection feed served to this client, for "load more". */
+  lastPage: number;
 }
 
 @Injectable()
 export class ScraperSessionService implements OnModuleDestroy {
   private readonly logger = new Logger(ScraperSessionService.name);
   private readonly activeSessions = new Map<string, ActiveSession>();
+  /** In-flight session creations, so parallel events share one browser launch. */
+  private readonly pendingSessions = new Map<string, Promise<ActiveSession>>();
   private readonly sessionTimeout = 30 * 60 * 1000; // 30 minutes
+  /** How many times to reopen the homepage and try the menu click before giving up. */
+  private readonly CLICK_ATTEMPTS = 3;
+  private readonly PAGE_SIZE = 40;
 
   constructor(
     @InjectRepository(ScraperSession)
@@ -53,9 +60,38 @@ export class ScraperSessionService implements OnModuleDestroy {
     setInterval(() => this.cleanupInactiveSessions(), 5 * 60 * 1000);
   }
 
+  /**
+   * Return this client's browser session, starting one if needed.
+   *
+   * Sessions are created on first use rather than on connect: a browser launch that failed
+   * at connect time used to leave the client permanently without a session (every later
+   * click silently fell back to stored data), and idle visitors launched a browser they
+   * never used. Concurrent callers share one launch.
+   */
+  async ensureSession(sessionId: string): Promise<ActiveSession> {
+    const existing = this.activeSessions.get(sessionId);
+    if (existing) {
+      if (existing.browser.isConnected()) return existing;
+
+      // Browser died under us (crash, or closed by the OS) — drop it and start over.
+      this.logger.warn(`Session ${sessionId} lost its browser; recreating`);
+      this.activeSessions.delete(sessionId);
+    }
+
+    let pending = this.pendingSessions.get(sessionId);
+    if (!pending) {
+      pending = this.createSession(sessionId)
+        .then(() => this.activeSessions.get(sessionId)!)
+        .finally(() => this.pendingSessions.delete(sessionId));
+      this.pendingSessions.set(sessionId, pending);
+    }
+
+    return pending;
+  }
+
   async createSession(sessionId: string): Promise<void> {
     this.logger.log(`Creating interactive scraper session: ${sessionId}`);
-    
+
     try {
       const { browser, context, page } = await this.interactiveScraper.initializeBrowser();
       await this.interactiveScraper.navigateToHomepage(page);
@@ -67,6 +103,7 @@ export class ScraperSessionService implements OnModuleDestroy {
         lastActivity: new Date(),
         currentUrl: page.url(),
         productsScraped: 0,
+        lastPage: 0,
       };
       
       this.activeSessions.set(sessionId, session);
@@ -93,7 +130,7 @@ export class ScraperSessionService implements OnModuleDestroy {
   async handleHover(sessionId: string, target: string, navigationSlug?: string): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
     
-    const session = this.getSession(sessionId);
+    const session = await this.ensureSession(sessionId);
     
     try {
       const hovered = await this.interactiveScraper.hoverNavigation(
@@ -125,38 +162,32 @@ export class ScraperSessionService implements OnModuleDestroy {
   async handleClick(sessionId: string, target: string, categorySlug: string, navigationSlug?: string): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
     
-    const session = this.getSession(sessionId);
+    const session = await this.ensureSession(sessionId);
     
     try {
       // A click is an explicit request for live data: mirror it on the real site and only
-      // fall back to what is stored if the live pass comes back empty.
+      // fall back to what is stored once the live attempts are exhausted.
+      const clicked = await this.clickWithRetries(session, categorySlug, navigationSlug || target);
 
-      // Hover navigation if provided
-      if (navigationSlug) {
-        await this.interactiveScraper.hoverNavigation(session.page, navigationSlug);
-      }
-      
-      // Click category
-      const clicked = await this.interactiveScraper.clickCategory(
-        session.page,
-        target,
-        categorySlug
-      );
-      
       if (!clicked) {
-        throw new Error(`Failed to click category ${categorySlug}`);
+        return this.cachedFallback(
+          categorySlug,
+          `Could not click "${categorySlug}" in the menu after ${this.CLICK_ATTEMPTS} attempts`,
+        );
       }
-      
+
       // Scrape first batch
       const products = await this.interactiveScraper.scrapeProductsFromPage(
         session.page,
         categorySlug,
-        40
+        this.PAGE_SIZE,
+        1,
       );
-      
+
       // Update session state
       session.categorySlug = categorySlug;
       session.productsScraped = products.length;
+      session.lastPage = 1;
       session.currentUrl = session.page.url();
 
       if (products.length === 0) {
@@ -168,8 +199,7 @@ export class ScraperSessionService implements OnModuleDestroy {
       // Queue background refresh for other categories
       await this.queueBackgroundRefresh(categorySlug);
 
-      // Check if more products available
-      const hasMore = await this.interactiveScraper.clickLoadMore(session.page);
+      const hasMore = await this.interactiveScraper.hasMorePages(session.page, categorySlug, 2);
 
       return {
         products,
@@ -188,13 +218,26 @@ export class ScraperSessionService implements OnModuleDestroy {
   async handleLoadMore(sessionId: string, target: string, categorySlug: string): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
     
-    const session = this.getSession(sessionId);
+    const session = await this.ensureSession(sessionId);
     
     try {
-      // Click load more
-      const clicked = await this.interactiveScraper.clickLoadMore(session.page);
-      
-      if (!clicked) {
+      // A category switch can leave the session pointing elsewhere; restart paging then.
+      if (session.categorySlug !== categorySlug) {
+        session.categorySlug = categorySlug;
+        session.lastPage = 1;
+        session.productsScraped = 0;
+      }
+
+      const nextPage = (session.lastPage || 1) + 1;
+
+      const newProducts = await this.interactiveScraper.scrapeProductsFromPage(
+        session.page,
+        categorySlug,
+        this.PAGE_SIZE,
+        nextPage,
+      );
+
+      if (newProducts.length === 0) {
         return {
           products: [],
           status: 'partial',
@@ -203,31 +246,26 @@ export class ScraperSessionService implements OnModuleDestroy {
           hasMore: false,
         };
       }
-      
-      // Scrape new products
-      const newProducts = await this.interactiveScraper.scrapeProductsFromPage(
+
+      // Update counts
+      session.lastPage = nextPage;
+      session.productsScraped += newProducts.length;
+
+      await this.saveProductsToCache(categorySlug, newProducts);
+
+      // Check if still more available
+      const hasMore = await this.interactiveScraper.hasMorePages(
         session.page,
         categorySlug,
-        40
+        nextPage + 1,
       );
-      
-      // Update counts
-      session.productsScraped += newProducts.length;
-      
-      // Save to cache
-      if (newProducts.length > 0) {
-        await this.saveProductsToCache(categorySlug, newProducts);
-      }
-      
-      // Check if still more available
-      const hasMore = await this.interactiveScraper.clickLoadMore(session.page);
-      
+
       // Update session stats
       await this.updateSessionStats(sessionId, {
-        load_more_count: (session.productsScraped / 40) - 1,
+        load_more_count: nextPage - 1,
         total_products_scraped: session.productsScraped,
       });
-      
+
       return {
         products: newProducts,
         status: 'success',
@@ -262,7 +300,7 @@ export class ScraperSessionService implements OnModuleDestroy {
     }
     
     // Get from session
-    const session = this.getSession(sessionId);
+    const session = await this.ensureSession(sessionId);
     const product = await this.productRepo.findOne({
       where: { source_id: sourceId },
     });
@@ -285,6 +323,44 @@ export class ScraperSessionService implements OnModuleDestroy {
       where: { source_id: sourceId },
       relations: ['detail', 'reviews', 'category'],
     });
+  }
+
+  /**
+   * Hover the section and click the category, reopening the homepage between attempts.
+   *
+   * The menu is injected progressively and its links only become clickable once their panel
+   * is hovered, so a failure is usually a timing problem that a fresh page load resolves —
+   * worth retrying before falling back to stored data.
+   */
+  private async clickWithRetries(
+    session: ActiveSession,
+    categorySlug: string,
+    navigationSlug?: string,
+  ): Promise<boolean> {
+    for (let attempt = 1; attempt <= this.CLICK_ATTEMPTS; attempt++) {
+      try {
+        // Always start from the homepage: after a previous click the browser sits on a
+        // collection page, where the menu markup may differ or be stale.
+        await this.interactiveScraper.navigateToHomepage(session.page);
+
+        if (navigationSlug) {
+          await this.interactiveScraper.hoverNavigation(session.page, navigationSlug);
+        }
+
+        if (await this.interactiveScraper.clickCategory(session.page, categorySlug, navigationSlug)) {
+          this.logger.log(`Clicked ${categorySlug} on attempt ${attempt}/${this.CLICK_ATTEMPTS}`);
+          return true;
+        }
+
+        this.logger.warn(`Click attempt ${attempt}/${this.CLICK_ATTEMPTS} failed for ${categorySlug}`);
+      } catch (error) {
+        this.logger.warn(
+          `Click attempt ${attempt}/${this.CLICK_ATTEMPTS} for ${categorySlug} threw: ${error.message}`,
+        );
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -352,6 +428,7 @@ export class ScraperSessionService implements OnModuleDestroy {
       if (existing) {
         // Update
         existing.title = productData.title;
+        existing.author = productData.author ?? existing.author;
         existing.price = productData.price;
         existing.image_url = productData.image_url;
         existing.last_scraped_at = new Date();
@@ -361,6 +438,7 @@ export class ScraperSessionService implements OnModuleDestroy {
         const product = this.productRepo.create({
           source_id: productData.source_id,
           title: productData.title,
+          author: productData.author ?? null,
           price: productData.price,
           currency: productData.currency || 'GBP',
           image_url: productData.image_url || '',

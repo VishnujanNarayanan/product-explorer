@@ -38,32 +38,24 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(private readonly scraperSessionService: ScraperSessionService) {}
 
-  async handleConnection(client: Socket) {
+  handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
-    
-    try {
-      // Create a new scraper session for this client
-      await this.scraperSessionService.createSession(client.id);
-      this.clientSessions.set(client.id, client.id);
-      
-      // Send session ready event
-      client.emit('SESSION_READY', {
-        type: 'SESSION_READY',
-        payload: {
-          sessionId: client.id,
-          status: 'ready',
-          message: 'Interactive scraper session initialized',
-        },
-      });
-    } catch (error) {
-      this.logger.error(`Failed to create session for ${client.id}:`, error);
-      client.emit('ERROR', {
-        type: 'ERROR',
-        payload: {
-          message: `Failed to initialize scraper session: ${error.message}`,
-        },
-      });
-    }
+
+    this.clientSessions.set(client.id, client.id);
+
+    // The browser is started on the first action instead of here. Launching one per
+    // connection meant two tabs racing two Chromium starts, and a launch that lost that
+    // race left the client with no session at all — every later click then quietly served
+    // stored data. Readiness is about the client being able to send actions, not about a
+    // browser already being warm.
+    client.emit('SESSION_READY', {
+      type: 'SESSION_READY',
+      payload: {
+        sessionId: client.id,
+        status: 'ready',
+        message: 'Interactive scraper session ready',
+      },
+    });
   }
 
   handleDisconnect(client: Socket) {

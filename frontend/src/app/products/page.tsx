@@ -218,15 +218,13 @@ function ProductsPageContent() {
     clickCategory(currentCategory?.title || categorySlug, categorySlug, navigationSlug || undefined)
   }, [categorySlug, navigationSlug, isWsConnected, scraperStatus, currentCategory, clickCategory])
 
-  // Handle category change
+  // Handle category change. Every click is a request for fresh data — including clicking
+  // the category already open, which is how you ask for a re-scrape.
   const handleCategoryChange = (slug: string) => {
-    if (slug === categorySlug) return
-
-    // Drop the previous category's live results so its books do not linger in the grid,
-    // and let the live-scrape effect fire for the new one.
-    if (categorySlug) {
-      resetProducts(categorySlug)
-    }
+    // Drop held results so the grid cannot show the previous category's books, and clear
+    // the guard so the live-scrape effect fires again.
+    if (categorySlug) resetProducts(categorySlug)
+    resetProducts(slug)
     liveRequestedRef.current = null
 
     if (!isWsConnected) {
@@ -234,6 +232,15 @@ function ProductsPageContent() {
         title: "Offline Mode",
         description: "Live browser session unavailable — showing stored products",
       })
+    }
+
+    if (slug === categorySlug) {
+      // Same category: the URL will not change, so nothing would re-trigger the effect.
+      if (isWsConnected && scraperStatus === 'ready') {
+        liveRequestedRef.current = slug
+        clickCategory(currentCategory?.title || slug, slug, navigationSlug || undefined)
+      }
+      return
     }
 
     router.push(`/products?category=${slug}&navigation=${navigationSlug}`)
