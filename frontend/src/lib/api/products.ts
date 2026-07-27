@@ -3,21 +3,43 @@
 import { api } from './client';
 import { Product, ProductFilters, ScrapeProductResponse } from '../types';
 
-export interface CategoryProductsResponse {
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface CategoryProductsResponse extends PaginationMeta {
   message: string;
   products: Product[];
   category?: any;
   jobQueued: boolean;
 }
 
+export interface ProductsResponse extends PaginationMeta {
+  products: Product[];
+}
+
+/** Build a `?page=&limit=` string, omitting either value when it is not supplied. */
+function pageQuery(page?: number, limit?: number): string {
+  const params = new URLSearchParams();
+  if (page !== undefined) params.set('page', String(page));
+  if (limit !== undefined) params.set('limit', String(limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export const productsAPI = {
   // Get category products (triggers scrape if needed) - uses same endpoint as navigationAPI
-  getProductsByCategory: (categorySlug: string) => 
-    api.get<CategoryProductsResponse>(`/categories/${categorySlug}/products`),
-  
-  // Get all products (fallback to all categories)
-  getAllProducts: () => 
-    api.get<Product[]>('/products'),
+  getProductsByCategory: (categorySlug: string, page?: number, limit?: number) =>
+    api.get<CategoryProductsResponse>(
+      `/categories/${categorySlug}/products${pageQuery(page, limit)}`,
+    ),
+
+  // Get all products. The endpoint is paged, so this returns an envelope, not a bare array.
+  getAllProducts: (page?: number, limit?: number) =>
+    api.get<ProductsResponse>(`/products${pageQuery(page, limit)}`),
   
   // Get single product by source_id
   getProduct: (sourceId: string, refresh?: boolean) => 

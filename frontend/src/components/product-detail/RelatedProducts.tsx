@@ -41,12 +41,10 @@ export function RelatedProducts({ productId, limit = 4 }: RelatedProductsProps) 
       } else {
         // Fallback: get some random products
         const allProducts = await productsAPI.getAllProducts()
-        const randomProducts = Array.isArray(allProducts) 
-          ? allProducts
-              .filter(p => p.source_id !== productId)
-              .sort(() => Math.random() - 0.5)
-              .slice(0, limit)
-          : []
+        const randomProducts = (allProducts.products || [])
+          .filter(p => p.source_id !== productId)
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit)
         setRelatedProducts(randomProducts)
       }
     } catch (error) {

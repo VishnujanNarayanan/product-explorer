@@ -25,7 +25,7 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
       } else {
         // Fallback to all products
         const response = await productsAPI.getAllProducts();
-        loadedProducts = Array.isArray(response) ? response : [];
+        loadedProducts = response.products || [];
       }
       
       // Apply client-side filters
