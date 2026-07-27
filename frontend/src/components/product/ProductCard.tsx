@@ -96,6 +96,12 @@ export function ProductCard({
             {product.title}
           </h3>
         </Link>
+        {/* The assignment lists author among the required product-tile fields. */}
+        {product.author && (
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+            by {product.author}
+          </p>
+        )}
         {showCategory && product.category && (
           <p className="mt-1 text-xs text-muted-foreground">
             in {product.category.title}

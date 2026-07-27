@@ -23,6 +23,10 @@ export interface Category {
   title: string;
   slug: string;
   product_count: number;
+  /** Listing checkpoint: the last products.json page fetched for this collection. */
+  last_page_scraped?: number;
+  /** True once a short page proved the collection has no further products. */
+  is_exhausted?: boolean;
   last_scraped_at: string; // ISO string from backend
   navigation_id?: number;
   parent_id?: number;
@@ -36,6 +40,11 @@ export interface Product {
   id: number;
   source_id: string;
   title: string;
+  /**
+   * Parsed by the scraper from the Shopify handle — products.json carries no author field.
+   * Null for items whose handle does not encode one, which is mostly DVDs and CDs.
+   */
+  author: string | null;
   price: number | null;
   currency: string;
   image_url: string;

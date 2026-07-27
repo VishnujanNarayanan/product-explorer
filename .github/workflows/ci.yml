@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend — lint, typecheck, test, build
+    name: Backend — lint, typecheck, unit + integration tests, build
     runs-on: ubuntu-latest
 
     # The integration test talks to a real PostgreSQL rather than a mock, so the schema and
@@ -50,6 +50,9 @@ jobs:
       DB_DATABASE: wob_explorer
       REDIS_HOST: localhost
       REDIS_PORT: 6379
+      # No job here drives a browser, and the runner has no Chromium. Without this the app
+      # would try to scrape navigation on boot against an empty database and fail.
+      SCRAPE_ON_STARTUP: 'false'
 
     steps:
       - uses: actions/checkout@v4
@@ -77,9 +80,15 @@ jobs:
         working-directory: backend
         run: npx tsc --noEmit
 
-      - name: Test
+      - name: Unit tests
         working-directory: backend
         run: npm test -- --ci
+
+      # Runs the real application against the PostgreSQL and Redis services above — no
+      # repository mocks, so entities, schema and the validation pipe are exercised together.
+      - name: Integration tests
+        working-directory: backend
+        run: npm run test:e2e
 
       - name: Build
         working-directory: backend
@@ -117,7 +126,7 @@ jobs:
 
       - name: Test
         working-directory: frontend
-        run: npm test -- --ci --passWithNoTests
+        run: npm test -- --ci --coverage
 
       - name: Build
         working-directory: frontend
