@@ -36,8 +36,8 @@ function ProductsPageContent() {
     clickCategory,
     loadMore,
     isConnected: isWsConnected,
+    currentCategory: wsCategory,
     resetProducts,
-    getCachedProducts,
     hasMore: wsHasMore,
     isLoading: isWsLoading,
     error: _wsError,
@@ -56,11 +56,19 @@ function ProductsPageContent() {
   const loadProductsRef = useRef(loadProducts)
   const startPollingRef = useRef<(() => void) | null>(null)
   const lastProductCountRef = useRef(0)
-  
+  // Category slug we have already asked the live browser session to click, so the
+  // request fires once per category rather than on every status change.
+  const liveRequestedRef = useRef<string | null>(null)
+  const isWsConnectedRef = useRef(isWsConnected)
+
   // Keep refs updated
   useEffect(() => {
     loadProductsRef.current = loadProducts
   }, [loadProducts])
+
+  useEffect(() => {
+    isWsConnectedRef.current = isWsConnected
+  }, [isWsConnected])
 
   const currentNav = navigation.find(nav => nav.slug === navigationSlug)
   const currentCategory = categories.find(cat => cat.slug === categorySlug)
@@ -71,14 +79,15 @@ function ProductsPageContent() {
     currentCategory && { label: currentCategory.title, href: `/products?category=${categorySlug}&navigation=${navigationSlug}` }
   ].filter(Boolean)
 
-  // Update display products based on mode
+  // Update display products based on mode. Live results win, but only once they belong to
+  // the category currently on screen.
   useEffect(() => {
-    if (isWsConnected && scraperStatus === 'ready' && wsProducts.length > 0) {
+    if (isWsConnected && wsCategory === categorySlug && wsProducts.length > 0) {
       setDisplayProducts(wsProducts)
     } else {
       setDisplayProducts(products)
     }
-  }, [wsProducts, products, isWsConnected, scraperStatus])
+  }, [wsProducts, products, isWsConnected, wsCategory, categorySlug])
 
   // Stop polling function
   const stopPolling = useCallback(() => {
@@ -162,24 +171,21 @@ function ProductsPageContent() {
     
     const initializeProducts = async () => {
       try {
-        // Check if we have cached products first
-        const cachedProducts = getCachedProducts(categorySlug)
-        if (cachedProducts.length > 0 && isWsConnected) {
-          // Use cached WebSocket products
-          setDisplayProducts(cachedProducts)
-          setHasInitiallyLoaded(true)
-          isInitializingRef.current = false
-          return
-        }
-        
-        // Fallback to REST API
+        // Paint whatever is already stored so the grid is not blank while the live
+        // browser session works through hover -> click -> scrape.
         const result = await navigationAPI.getCategoryProducts(categorySlug)
         lastProductCountRef.current = result.products?.length || 0
         await loadProductsRef.current()
-        
+
         await new Promise(resolve => setTimeout(resolve, 100))
-        
-        if (result.jobQueued && lastProductCountRef.current === 0 && startPollingRef.current) {
+
+        // Polling is the no-WebSocket fallback; the live session pushes DATA_CHUNK instead.
+        if (
+          !isWsConnectedRef.current &&
+          result.jobQueued &&
+          lastProductCountRef.current === 0 &&
+          startPollingRef.current
+        ) {
           startPollingRef.current()
         } else {
           setHasInitiallyLoaded(true)
@@ -191,37 +197,45 @@ function ProductsPageContent() {
         isInitializingRef.current = false
       }
     }
-    
+
     initializeProducts()
-    
+
     return () => {
       stopPolling()
       isInitializingRef.current = false
     }
-  }, [categorySlug, stopPolling, isWsConnected, getCachedProducts])
+  }, [categorySlug, stopPolling])
+
+  // Drive the real browser session: clicking a category here clicks it on World of Books.
+  // Runs when the category changes and also when the socket becomes ready afterwards, so
+  // arriving from a category card scrapes live instead of only showing stored products.
+  useEffect(() => {
+    if (!categorySlug) return
+    if (!isWsConnected || scraperStatus !== 'ready') return
+    if (liveRequestedRef.current === categorySlug) return
+
+    liveRequestedRef.current = categorySlug
+    clickCategory(currentCategory?.title || categorySlug, categorySlug, navigationSlug || undefined)
+  }, [categorySlug, navigationSlug, isWsConnected, scraperStatus, currentCategory, clickCategory])
 
   // Handle category change
   const handleCategoryChange = (slug: string) => {
-    const category = categories.find(c => c.slug === slug)
-    
-    // Use interactive scraper if connected
-    if (isWsConnected && scraperStatus === 'ready') {
-      const target = category?.title || slug
-      
-      // Reset previous category products
-      if (categorySlug && categorySlug !== slug) {
-        resetProducts(categorySlug)
-      }
-      
-      clickCategory(target, slug, navigationSlug || undefined)
-    } else {
-      // Fallback to traditional method
+    if (slug === categorySlug) return
+
+    // Drop the previous category's live results so its books do not linger in the grid,
+    // and let the live-scrape effect fire for the new one.
+    if (categorySlug) {
+      resetProducts(categorySlug)
+    }
+    liveRequestedRef.current = null
+
+    if (!isWsConnected) {
       toast({
-        title: "Using Cached Data",
-        description: "WebSocket not available, loading cached products",
+        title: "Offline Mode",
+        description: "Live browser session unavailable — showing stored products",
       })
     }
-    
+
     router.push(`/products?category=${slug}&navigation=${navigationSlug}`)
   }
 

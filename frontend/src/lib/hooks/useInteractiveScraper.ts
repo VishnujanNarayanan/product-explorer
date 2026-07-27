@@ -34,7 +34,6 @@ export const useInteractiveScraper = () => {
 
   const productsCache = useRef<Map<string, Product[]>>(new Map());
   const currentCategoryRef = useRef<string | null>(null);
-  const initialStateSet = useRef(false);
 
   // Memoize event handlers to prevent re-creation
   const eventHandlers = useMemo(() => ({
@@ -156,15 +155,16 @@ export const useInteractiveScraper = () => {
 
   // Setup WebSocket listeners - RUNS ONCE
   useEffect(() => {
-    // Set initial state only once
-    if (!initialStateSet.current) {
-      setState(prev => ({
-        ...prev,
-        isConnected: webSocketClient.isConnected(),
-        sessionId: webSocketClient.getSessionId(),
-      }));
-      initialStateSet.current = true;
-    }
+    // Sync with the socket singleton on every mount. The socket usually connects while the
+    // first page is still rendering, so a component mounting later (e.g. /products reached
+    // from a category card) never sees 'connected'/'session-ready' fire and would otherwise
+    // sit at status 'idle' forever, falling back to cached data.
+    setState(prev => ({
+      ...prev,
+      isConnected: webSocketClient.isConnected(),
+      sessionId: webSocketClient.getSessionId(),
+      status: webSocketClient.isSessionReady() ? 'ready' : prev.status,
+    }));
 
     // Register listeners
     webSocketClient.on('session-ready', eventHandlers.handleSessionReady);

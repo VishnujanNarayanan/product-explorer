@@ -128,20 +128,9 @@ export class ScraperSessionService implements OnModuleDestroy {
     const session = this.getSession(sessionId);
     
     try {
-      // First check cache
-      const cachedProducts = await this.getCachedProducts(categorySlug, 120);
-      if (cachedProducts.length > 0) {
-        this.logger.log(`Returning ${cachedProducts.length} cached products for ${categorySlug}`);
-        
-        return {
-          products: cachedProducts,
-          status: 'success',
-          message: `Loaded ${cachedProducts.length} cached products`,
-          totalScraped: cachedProducts.length,
-          hasMore: cachedProducts.length >= 120,
-        };
-      }
-      
+      // A click is an explicit request for live data: mirror it on the real site and only
+      // fall back to what is stored if the live pass comes back empty.
+
       // Hover navigation if provided
       if (navigationSlug) {
         await this.interactiveScraper.hoverNavigation(session.page, navigationSlug);
@@ -169,35 +158,30 @@ export class ScraperSessionService implements OnModuleDestroy {
       session.categorySlug = categorySlug;
       session.productsScraped = products.length;
       session.currentUrl = session.page.url();
-      
-      // Save to cache
-      if (products.length > 0) {
-        await this.saveProductsToCache(categorySlug, products);
-        
-        // Queue background refresh for other categories
-        await this.queueBackgroundRefresh(categorySlug);
+
+      if (products.length === 0) {
+        return this.cachedFallback(categorySlug, `No products found live on ${categorySlug}`);
       }
-      
+
+      await this.saveProductsToCache(categorySlug, products);
+
+      // Queue background refresh for other categories
+      await this.queueBackgroundRefresh(categorySlug);
+
       // Check if more products available
       const hasMore = await this.interactiveScraper.clickLoadMore(session.page);
-      
+
       return {
         products,
         status: 'success',
-        message: `Scraped ${products.length} products from ${categorySlug}`,
+        message: `Scraped ${products.length} products live from ${categorySlug}`,
         totalScraped: products.length,
         hasMore,
       };
-      
+
     } catch (error) {
       this.logger.error(`Click failed for ${sessionId}:`, error);
-      return {
-        products: [],
-        status: 'failed',
-        message: `Click failed: ${error.message}`,
-        totalScraped: 0,
-        hasMore: false,
-      };
+      return this.cachedFallback(categorySlug, `Live scrape failed: ${error.message}`);
     }
   }
 
@@ -301,6 +285,26 @@ export class ScraperSessionService implements OnModuleDestroy {
       where: { source_id: sourceId },
       relations: ['detail', 'reviews', 'category'],
     });
+  }
+
+  /**
+   * Last resort when a live pass yields nothing: serve what was stored previously so the
+   * grid is not empty, while saying plainly that the data is not fresh.
+   */
+  private async cachedFallback(categorySlug: string, reason: string): Promise<ScrapingResult> {
+    const cachedProducts = await this.getCachedProducts(categorySlug, 120);
+
+    this.logger.warn(`${reason} — falling back to ${cachedProducts.length} stored products`);
+
+    return {
+      products: cachedProducts,
+      status: cachedProducts.length > 0 ? 'partial' : 'failed',
+      message: cachedProducts.length > 0
+        ? `${reason}. Showing ${cachedProducts.length} previously scraped products`
+        : reason,
+      totalScraped: cachedProducts.length,
+      hasMore: false,
+    };
   }
 
   private getSession(sessionId: string): ActiveSession {

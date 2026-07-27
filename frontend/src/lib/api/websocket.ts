@@ -32,6 +32,10 @@ class WebSocketClient {
   private socket: Socket | null = null;
   private listeners: Map<string, WebSocketCallback[]> = new Map();
   private sessionId: string | null = null;
+  // The gateway only emits SESSION_READY once, right after it connects. A component that
+  // mounts later (navigating to /products) misses that event, so the flag is kept here and
+  // read back via isSessionReady() instead of relying on the event alone.
+  private sessionReady = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private connectionUrl: string;
@@ -67,6 +71,7 @@ class WebSocketClient {
 
     this.socket.on('SESSION_READY', (data: WebSocketResponse) => {
       console.log('🔵 Session ready:', data);
+      this.sessionReady = true;
       this.emit('session-ready', data);
     });
 
@@ -92,6 +97,9 @@ class WebSocketClient {
 
     this.socket.on('disconnect', (reason) => {
       console.log('🟡 WebSocket disconnected:', reason);
+      // The gateway tears down the Playwright session on disconnect, so the next
+      // connection gets a fresh SESSION_READY.
+      this.sessionReady = false;
       this.emit('disconnected', { reason });
       
       if (reason === 'io server disconnect') {
@@ -117,6 +125,11 @@ class WebSocketClient {
 
   public getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  /** True once the gateway has a live browser session behind this socket. */
+  public isSessionReady(): boolean {
+    return this.isConnected() && this.sessionReady;
   }
 
   public sendEvent(event: WebSocketEvent): void {
