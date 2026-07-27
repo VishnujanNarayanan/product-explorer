@@ -32,9 +32,4 @@ export class PaginationQueryDto {
   @Min(1, { message: 'limit must be 1 or greater' })
   @Max(100, { message: 'limit may not exceed 100' })
   limit?: number = 24;
-
-  /** Rows to skip, derived from the validated page/limit pair. */
-  get offset(): number {
-    return ((this.page ?? 1) - 1) * (this.limit ?? 24);
-  }
 }

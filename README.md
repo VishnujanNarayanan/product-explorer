@@ -291,16 +291,32 @@ The backend image declares a healthcheck against `/api/health`, and `frontend` w
 ## Testing and CI
 
 ```bash
-cd backend  && npm run lint && npx tsc --noEmit && npm test
+cd backend  && npm run lint && npx tsc --noEmit && npm test && npm run test:e2e
 cd frontend && npm run lint && npx tsc --noEmit && npm test && npm run build
 ```
+
+**171 tests**, none of which touch the network:
+
+| Suite | Count | Covers |
+| --- | --- | --- |
+| `base.scraper.spec.ts` | 23 | Locale-prefixed URL building, the handle→author parse, price and HTML normalisation |
+| `dto-validation.spec.ts` | 47 | Every request DTO, against real slugs and source ids |
+| `core.controller.spec.ts` | 25 | Routing, 404 vs 500, paging pass-through, the legacy route |
+| `products.service.spec.ts` | 12 | Paging arithmetic and `hasMore` boundaries |
+| `api.e2e-spec.ts` | 22 | **Integration** — the real app against real PostgreSQL and Redis |
+| frontend | 42 | `useSearch` debounce, `ProductCard` rendering and a11y, shared utilities |
+
+The integration suite inserts its own `e2e-`-prefixed fixture, marks its category exhausted so
+no request can reach World of Books, and removes the fixture afterwards. One of its tests walks
+every entity's columns against the live schema — the check that would have caught the
+`result_count` drift.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request to
 `main`, in three parallel jobs:
 
 | Job | Does |
 | --- | --- |
-| **backend** | lint → typecheck → test → build → seed smoke test |
+| **backend** | lint → typecheck → unit tests → integration tests → build → seed smoke test |
 | **frontend** | lint → typecheck → test → build |
 | **docker** | builds both images, with layer caching |
 
@@ -325,7 +341,6 @@ npx ts-node scraper-smoke.ts detail   # detail + related products
 
 Tracked honestly rather than implied complete:
 
-- **Minimal automated tests** — one backend spec; no frontend specs yet.
 - **Three `react-hooks/set-state-in-effect` warnings.** `WebSocketStatus` and
   `useInteractiveScraper` mirror the Socket.IO client into React state, where
   `useSyncExternalStore` is the right tool, and `useSearch` flips a flag inside its debounce
