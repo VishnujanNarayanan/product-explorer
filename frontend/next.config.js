@@ -7,9 +7,12 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'www.worldofbooks.com',
       },
+      // World of Books is a Shopify storefront: every product image URL returned by
+      // products.json and by the detail pages is served from Shopify's CDN, not from
+      // worldofbooks.com. Without this entry next/image rejects every real product image.
       {
         protocol: 'https',
-        hostname: 'via.placeholder.com',
+        hostname: 'cdn.shopify.com',
       },
     ],
   },
