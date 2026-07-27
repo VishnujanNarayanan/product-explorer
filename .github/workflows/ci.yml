@@ -50,6 +50,9 @@ jobs:
       DB_DATABASE: wob_explorer
       REDIS_HOST: localhost
       REDIS_PORT: 6379
+      # No job here drives a browser, and the runner has no Chromium. Without this the app
+      # would try to scrape navigation on boot against an empty database and fail.
+      SCRAPE_ON_STARTUP: 'false'
 
     steps:
       - uses: actions/checkout@v4

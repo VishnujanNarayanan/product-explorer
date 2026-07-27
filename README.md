@@ -83,8 +83,11 @@ The schema is created automatically: `backend/database/schema.sql` is mounted in
 container's init hook. That hook runs **only when the data volume is first created** — if tables are
 missing, reset with `docker compose down -v && docker compose up -d postgres redis`.
 
-On first boot the backend scrapes navigation automatically if the `navigation` table is empty. If
-you would rather not depend on live scraping, seed the database instead:
+On first boot the backend scrapes navigation automatically if the `navigation` table is empty.
+That scrape is best-effort: if it fails the failure is logged and the API still starts, serving
+whatever is stored. Set `SCRAPE_ON_STARTUP=false` to skip it entirely.
+
+If you would rather not depend on live scraping, seed the database instead:
 
 ```bash
 cd backend
@@ -295,13 +298,14 @@ cd backend  && npm run lint && npx tsc --noEmit && npm test && npm run test:e2e
 cd frontend && npm run lint && npx tsc --noEmit && npm test && npm run build
 ```
 
-**171 tests**, none of which touch the network:
+**176 tests**, none of which touch the network:
 
 | Suite | Count | Covers |
 | --- | --- | --- |
 | `base.scraper.spec.ts` | 23 | Locale-prefixed URL building, the handle→author parse, price and HTML normalisation |
 | `dto-validation.spec.ts` | 47 | Every request DTO, against real slugs and source ids |
 | `core.controller.spec.ts` | 25 | Routing, 404 vs 500, paging pass-through, the legacy route |
+| `startup-scrape.spec.ts` | 5 | Boot-time scrape is best-effort and cannot block startup |
 | `products.service.spec.ts` | 12 | Paging arithmetic and `hasMore` boundaries |
 | `api.e2e-spec.ts` | 22 | **Integration** — the real app against real PostgreSQL and Redis |
 | frontend | 42 | `useSearch` debounce, `ProductCard` rendering and a11y, shared utilities |

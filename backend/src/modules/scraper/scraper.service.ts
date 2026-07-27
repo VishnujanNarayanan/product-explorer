@@ -53,10 +53,34 @@ export class ScraperService implements OnModuleInit {
     private cacheManager: Cache,
   ) {}
 
+  /**
+   * Fill the navigation tree on first boot, so a fresh install is not empty.
+   *
+   * Deliberately best-effort. This used to `await` the scrape unguarded, which meant a failure
+   * to launch Chromium — a missing browser, a blocked network, markup drift — aborted module
+   * initialisation and the whole API refused to start, including the endpoints that never
+   * scrape anything. Serving stored or seeded data is strictly better than serving nothing.
+   *
+   * Set `SCRAPE_ON_STARTUP=false` to skip it entirely: useful in tests and CI, and for any
+   * deployment that prefers to populate the database with `npm run seed`.
+   */
   async onModuleInit() {
-    const count = await this.navigationRepo.count();
-    if (count === 0) {
-      await this.scrapeAndSaveNavigation();
+    if (process.env.SCRAPE_ON_STARTUP === 'false') {
+      this.logger.log('Startup navigation scrape disabled by SCRAPE_ON_STARTUP=false');
+      return;
+    }
+
+    try {
+      const count = await this.navigationRepo.count();
+      if (count === 0) {
+        this.logger.log('Navigation table is empty — scraping it once on startup');
+        await this.scrapeAndSaveNavigation();
+      }
+    } catch (error) {
+      this.logger.error(
+        `Startup navigation scrape failed, continuing without it: ${error.message}. ` +
+          'Populate the database with `npm run seed` or POST /api/scrape/navigation.',
+      );
     }
   }
 

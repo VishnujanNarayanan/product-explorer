@@ -28,6 +28,11 @@ describe('API (integration)', () => {
   const SOURCE_IDS = ['e2e-product-1', 'e2e-product-2', 'e2e-product-3'];
 
   beforeAll(async () => {
+    // No test here needs a browser. Without this the app would try to scrape navigation on
+    // boot whenever the table happens to be empty — which is exactly the case on a fresh CI
+    // database, where no Chromium is installed.
+    process.env.SCRAPE_ON_STARTUP = 'false';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
