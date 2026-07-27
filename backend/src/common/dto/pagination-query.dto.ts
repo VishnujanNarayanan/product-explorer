@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
@@ -8,6 +9,7 @@ import { IsInt, IsOptional, Max, Min } from 'class-validator';
  * without it every numeric constraint fails on a value that is perfectly valid.
  */
 export class PaginationQueryDto {
+  @ApiPropertyOptional({ minimum: 1, default: 1, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'page must be an integer' })
@@ -17,6 +19,13 @@ export class PaginationQueryDto {
   /**
    * Capped so a single request cannot ask the database for the entire catalogue.
    */
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: 100,
+    default: 24,
+    example: 24,
+    description: 'Capped at 100 so one request cannot pull the entire catalogue.',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'limit must be an integer' })

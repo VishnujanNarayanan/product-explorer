@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
@@ -19,6 +20,10 @@ const toBoolean = () =>
 
 export class GetCategoriesQueryDto {
   /** Filter to one navigation heading. Omitted means "every category". */
+  @ApiPropertyOptional({
+    example: 'fiction-books',
+    description: 'Navigation heading slug. Omit to list every category.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)
@@ -30,6 +35,11 @@ export class GetCategoriesQueryDto {
 
 export class GetProductQueryDto {
   /** Force a fresh detail scrape instead of serving the cached row. */
+  @ApiPropertyOptional({
+    example: false,
+    default: false,
+    description: 'Force a fresh detail scrape instead of serving the stored row.',
+  })
   @IsOptional()
   @toBoolean()
   @IsBoolean({ message: 'refresh must be true or false' })
@@ -37,6 +47,11 @@ export class GetProductQueryDto {
 }
 
 export class ScrapeProductBodyDto {
+  @ApiPropertyOptional({
+    example: true,
+    default: false,
+    description: 'Re-scrape the product page even if a stored detail row exists.',
+  })
   @IsOptional()
   @toBoolean()
   @IsBoolean({ message: 'refresh must be true or false' })
@@ -52,6 +67,7 @@ export enum LegacyScrapeType {
 }
 
 export class LegacyScrapeParamsDto {
+  @ApiProperty({ enum: LegacyScrapeType, example: LegacyScrapeType.CATEGORY })
   @IsEnum(LegacyScrapeType, {
     message: `type must be one of: ${Object.values(LegacyScrapeType).join(', ')}`,
   })
@@ -61,6 +77,10 @@ export class LegacyScrapeParamsDto {
    * Deliberately permissive: the legacy route accepts a slug, a bare keyword like "home",
    * or a full URL, depending on the type.
    */
+  @ApiProperty({
+    example: 'fantasy-fiction-books',
+    description: 'A slug, the keyword "home"/"all", or a full URL, depending on `type`.',
+  })
   @IsString()
   @MaxLength(2048)
   target: string;

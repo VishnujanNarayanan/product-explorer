@@ -11,8 +11,29 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CoreService } from './core.service';
 import { ScraperService } from '../scraper/scraper.service';
+import { Category } from '../../entities/category.entity';
+import { Navigation } from '../../entities/navigation.entity';
+import { Product } from '../../entities/product.entity';
+import { ScrapeJob } from '../../entities/scrape-job.entity';
+import {
+  CacheClearResponseDto,
+  CategoryProductsDto,
+  CleanupResponseDto,
+  ErrorResponseDto,
+  HealthResponseDto,
+  ScrapeNavigationResponseDto,
+  ScrapeProductResponseDto,
+} from '../../common/dto/responses.dto';
 import {
   CategoryProductsQueryDto,
   GetCategoriesQueryDto,
@@ -23,6 +44,7 @@ import {
 } from './dto';
 import { NumericIdParamDto, SlugParamDto, SourceIdParamDto } from '../../common/dto/params.dto';
 
+@ApiTags('catalogue')
 @Controller('api')
 export class CoreController {
   private readonly logger = new Logger(CoreController.name);
@@ -33,6 +55,13 @@ export class CoreController {
   ) {}
 
   @Get('navigation')
+  @ApiOperation({
+    summary: 'Navigation headings with their categories',
+    description:
+      'Served from the database. If the table is empty — a fresh install that has neither ' +
+      'been seeded nor scraped — a navigation scrape runs first and its result is returned.',
+  })
+  @ApiOkResponse({ type: [Navigation] })
   async getNavigation() {
     try {
       const navItems = await this.coreService.getNavigation();
@@ -51,6 +80,9 @@ export class CoreController {
   }
 
   @Get('categories')
+  @ApiOperation({ summary: 'List categories, optionally filtered to one navigation heading' })
+  @ApiOkResponse({ type: [Category] })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Malformed navigation slug' })
   async getCategories(@Query() query: GetCategoriesQueryDto) {
     try {
       if (query.navigation) {
@@ -64,6 +96,11 @@ export class CoreController {
   }
 
   @Get('categories/:slug')
+  @ApiOperation({ summary: 'One category, with its navigation, children and products' })
+  @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
+  @ApiOkResponse({ type: Category })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No category with that slug' })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Malformed slug' })
   async getCategory(@Param() params: SlugParamDto) {
     const category = await this.coreService.getCategoryBySlug(params.slug);
     if (!category) {
@@ -73,6 +110,18 @@ export class CoreController {
   }
 
   @Get('categories/:slug/products')
+  @ApiOperation({
+    summary: 'Products in a category, filling the collection on demand',
+    description:
+      'Returns stored products immediately and queues a background listing scrape for the ' +
+      'next unfetched page. Once the collection is exhausted no further requests are made, ' +
+      'so browsing a completed category costs the origin nothing. Responses are cached per ' +
+      'page for one hour; empty results are never cached.',
+  })
+  @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
+  @ApiOkResponse({ type: CategoryProductsDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No category with that slug' })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid slug, page or limit' })
   async getCategoryProducts(
     @Param() params: SlugParamDto,
     @Query() query: CategoryProductsQueryDto,
@@ -81,6 +130,16 @@ export class CoreController {
   }
 
   @Get('products/:sourceId')
+  @ApiOperation({
+    summary: 'One product with its detail',
+    description:
+      'Detail is scraped lazily — the product page is fetched the first time someone opens ' +
+      'it, then served from storage. Pass `refresh=true` to force a re-scrape.',
+  })
+  @ApiParam({ name: 'sourceId', example: '9846944432401' })
+  @ApiOkResponse({ type: Product })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No product with that source id' })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Malformed source id' })
   async getProduct(@Param() params: SourceIdParamDto, @Query() query: GetProductQueryDto) {
     const product = await this.scrapeProductOrFail(params.sourceId, query.refresh ?? false);
     if (!product) {
@@ -93,6 +152,11 @@ export class CoreController {
 
   @Post('scrape/navigation')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Re-scrape the navigation tree',
+    description: 'Runs synchronously — the mega-menu is a single page load.',
+  })
+  @ApiOkResponse({ type: ScrapeNavigationResponseDto })
   async scrapeNavigation() {
     try {
       this.logger.log('Manual navigation scrape triggered via API');
@@ -110,6 +174,13 @@ export class CoreController {
 
   @Post('scrape/category/:slug')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Queue a listing scrape for a category',
+    description: 'Returns immediately with whatever is already stored; the scrape runs on the queue.',
+  })
+  @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
+  @ApiOkResponse({ type: CategoryProductsDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No category with that slug' })
   async scrapeCategory(
     @Param() params: SlugParamDto,
     @Query() query: CategoryProductsQueryDto,
@@ -120,6 +191,10 @@ export class CoreController {
 
   @Post('scrape/product/:sourceId')
   @HttpCode(200)
+  @ApiOperation({ summary: 'Re-fetch a product on demand' })
+  @ApiParam({ name: 'sourceId', example: '9846944432401' })
+  @ApiOkResponse({ type: ScrapeProductResponseDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No product with that source id' })
   async scrapeProduct(@Param() params: SourceIdParamDto, @Body() body: ScrapeProductBodyDto) {
     this.logger.log(`Manual product scrape triggered via API: ${params.sourceId}`);
     const forceRefresh = body.refresh ?? false;
@@ -144,6 +219,15 @@ export class CoreController {
    */
   @Post('scrape/:type/:target')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Generic scrape trigger (legacy)',
+    description:
+      'Retained for older clients. Prefer scrape/navigation, scrape/category/{slug} and ' +
+      'scrape/product/{sourceId}.',
+    deprecated: true,
+  })
+  @ApiOkResponse({ description: 'Shape depends on the scrape type.' })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Unknown scrape type' })
   async triggerScrape(@Param() params: LegacyScrapeParamsDto) {
     try {
       this.logger.log(`Legacy scrape endpoint called: ${params.type}/${params.target}`);
@@ -166,6 +250,11 @@ export class CoreController {
   // ========== UTILITY ENDPOINTS ==========
 
   @Get('jobs/:id')
+  @ApiOperation({ summary: 'Scrape job status' })
+  @ApiParam({ name: 'id', example: 7 })
+  @ApiOkResponse({ type: ScrapeJob })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No job with that id' })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'id is not an integer' })
   async getJobStatus(@Param() params: NumericIdParamDto) {
     const job = await this.scraperService.getScrapeJobStatus(params.id);
     if (!job) {
@@ -176,6 +265,8 @@ export class CoreController {
 
   @Post('cleanup')
   @HttpCode(200)
+  @ApiOperation({ summary: 'Drop stale rows' })
+  @ApiOkResponse({ type: CleanupResponseDto })
   async cleanupData() {
     try {
       return await this.scraperService.cleanupOldData();
@@ -187,6 +278,8 @@ export class CoreController {
 
   @Post('cache/clear')
   @HttpCode(200)
+  @ApiOperation({ summary: 'Drop cached responses' })
+  @ApiOkResponse({ type: CacheClearResponseDto })
   async clearCache() {
     try {
       await this.scraperService.clearCache();
@@ -202,6 +295,8 @@ export class CoreController {
   }
 
   @Get('health')
+  @ApiOperation({ summary: 'Liveness and database connectivity' })
+  @ApiOkResponse({ type: HealthResponseDto })
   async healthCheck() {
     return this.coreService.healthCheck();
   }

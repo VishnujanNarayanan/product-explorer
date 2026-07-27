@@ -100,7 +100,15 @@ configured with `envFilePath: ['.env', '../.env']`.
 
 ## API
 
-Base URL `http://localhost:3001`.
+Base URL `http://localhost:3001`. Interactive documentation is served at
+**`http://localhost:3001/api/docs`** (Swagger UI), with the raw document at `/api/docs-json`.
+
+A generated snapshot is committed at [`docs/openapi.json`](docs/openapi.json) so the contract is
+readable and diffable without running anything. Regenerate it after changing a route:
+
+```bash
+cd backend && npm run openapi:export
+```
 
 | Method | Endpoint | Query | Description |
 | --- | --- | --- | --- |
@@ -265,5 +273,5 @@ Tracked honestly rather than implied complete:
 
 - **No `backend/Dockerfile`**, so the compose `backend` service cannot build.
 - **Minimal automated tests** — one backend spec; no frontend specs yet.
-- **No CI pipeline** and **no OpenAPI/Swagger** documentation.
+- **No CI pipeline.**
 - **Not deployed** — no hosted frontend or backend URL yet.

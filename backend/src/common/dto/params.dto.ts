@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsString, Matches, MaxLength, Min } from 'class-validator';
 
@@ -16,6 +17,7 @@ export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export class SlugParamDto {
+  @ApiProperty({ type: String, example: 'fantasy-fiction-books' })
   @IsString()
   @MaxLength(255)
   @Matches(SLUG_PATTERN, {
@@ -25,6 +27,7 @@ export class SlugParamDto {
 }
 
 export class SourceIdParamDto {
+  @ApiProperty({ type: String, example: '9846944432401' })
   @IsString()
   @MaxLength(255)
   @Matches(SOURCE_ID_PATTERN, { message: 'sourceId contains unsupported characters' })
@@ -33,6 +36,7 @@ export class SourceIdParamDto {
 
 /** Same rules as {@link SourceIdParamDto}, for routes whose path parameter is named `id`. */
 export class ProductIdParamDto {
+  @ApiProperty({ type: String, example: '9846944432401' })
   @IsString()
   @MaxLength(255)
   @Matches(SOURCE_ID_PATTERN, { message: 'id contains unsupported characters' })
@@ -40,6 +44,7 @@ export class ProductIdParamDto {
 }
 
 export class NumericIdParamDto {
+  @ApiProperty({ type: Number, example: 7 })
   @Type(() => Number)
   @IsInt({ message: 'id must be an integer' })
   @Min(1, { message: 'id must be 1 or greater' })

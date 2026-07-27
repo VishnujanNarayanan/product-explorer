@@ -3,7 +3,9 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { buildSwaggerConfig } from './swagger.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -35,9 +37,20 @@ async function bootstrap() {
     credentials: true,
   });
 
+  const document = SwaggerModule.createDocument(
+    app,
+    buildSwaggerConfig(new DocumentBuilder()),
+  );
+  SwaggerModule.setup('api/docs', app, document, {
+    jsonDocumentUrl: 'api/docs-json',
+    swaggerOptions: { persistAuthorization: true, tagsSorter: 'alpha' },
+    customSiteTitle: 'Product Data Explorer API',
+  });
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
+  logger.log(`API documentation:         http://localhost:${port}/api/docs`);
   logger.log(`CORS origins: ${allowedOrigins.join(', ')}`);
 }
 

@@ -1,0 +1,1259 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/navigation": {
+      "get": {
+        "description": "Served from the database. If the table is empty — a fresh install that has neither been seeded nor scraped — a navigation scrape runs first and its result is returned.",
+        "operationId": "CoreController_getNavigation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Navigation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Navigation headings with their categories",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "operationId": "CoreController_getCategories",
+        "parameters": [
+          {
+            "name": "navigation",
+            "required": false,
+            "in": "query",
+            "description": "Navigation heading slug. Omit to list every category.",
+            "schema": {
+              "example": "fiction-books",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Category"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed navigation slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List categories, optionally filtered to one navigation heading",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/categories/{slug}": {
+      "get": {
+        "operationId": "CoreController_getCategory",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "fantasy-fiction-books",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No category with that slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One category, with its navigation, children and products",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/categories/{slug}/products": {
+      "get": {
+        "description": "Returns stored products immediately and queues a background listing scrape for the next unfetched page. Once the collection is exhausted no further requests are made, so browsing a completed category costs the origin nothing. Responses are cached per page for one hour; empty results are never cached.",
+        "operationId": "CoreController_getCategoryProducts",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "fantasy-fiction-books",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Capped at 100 so one request cannot pull the entire catalogue.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24,
+              "example": 24,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryProductsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid slug, page or limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No category with that slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Products in a category, filling the collection on demand",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/products/{sourceId}": {
+      "get": {
+        "description": "Detail is scraped lazily — the product page is fetched the first time someone opens it, then served from storage. Pass `refresh=true` to force a re-scrape.",
+        "operationId": "CoreController_getProduct",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "9846944432401",
+              "type": "string"
+            }
+          },
+          {
+            "name": "refresh",
+            "required": false,
+            "in": "query",
+            "description": "Force a fresh detail scrape instead of serving the stored row.",
+            "schema": {
+              "default": false,
+              "example": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed source id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No product with that source id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One product with its detail",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/scrape/navigation": {
+      "post": {
+        "description": "Runs synchronously — the mega-menu is a single page load.",
+        "operationId": "CoreController_scrapeNavigation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeNavigationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Re-scrape the navigation tree",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/scrape/category/{slug}": {
+      "post": {
+        "description": "Returns immediately with whatever is already stored; the scrape runs on the queue.",
+        "operationId": "CoreController_scrapeCategory",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "fantasy-fiction-books",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Capped at 100 so one request cannot pull the entire catalogue.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24,
+              "example": 24,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryProductsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No category with that slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Queue a listing scrape for a category",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/scrape/product/{sourceId}": {
+      "post": {
+        "operationId": "CoreController_scrapeProduct",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "9846944432401",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScrapeProductBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeProductResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No product with that source id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Re-fetch a product on demand",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/scrape/{type}/{target}": {
+      "post": {
+        "deprecated": true,
+        "description": "Retained for older clients. Prefer scrape/navigation, scrape/category/{slug} and scrape/product/{sourceId}.",
+        "operationId": "CoreController_triggerScrape",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "category",
+              "type": "string",
+              "enum": [
+                "navigation",
+                "category",
+                "product"
+              ]
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "in": "path",
+            "description": "A slug, the keyword \"home\"/\"all\", or a full URL, depending on `type`.",
+            "schema": {
+              "example": "fantasy-fiction-books",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shape depends on the scrape type."
+          },
+          "400": {
+            "description": "Unknown scrape type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Generic scrape trigger (legacy)",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/jobs/{id}": {
+      "get": {
+        "operationId": "CoreController_getJobStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": 7,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id is not an integer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No job with that id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Scrape job status",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/cleanup": {
+      "post": {
+        "operationId": "CoreController_cleanupData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Drop stale rows",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/cache/clear": {
+      "post": {
+        "operationId": "CoreController_clearCache",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheClearResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Drop cached responses",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "CoreController_healthCheck",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness and database connectivity",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/products": {
+      "get": {
+        "description": "Reads stored products only — this endpoint never triggers a scrape. Use `GET /api/categories/{slug}/products` to fill a category on demand.",
+        "operationId": "ProductsController_getProducts",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Capped at 100 so one request cannot pull the entire catalogue.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24,
+              "example": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Category slug. Omit to list across every category.",
+            "schema": {
+              "example": "fantasy-fiction-books",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedProductsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page, limit or category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List products",
+        "tags": [
+          "products"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Product Data Explorer API",
+    "description": "Navigate World of Books from headings → categories → products → product detail.\n\nData is gathered by on-demand scraping and persisted to PostgreSQL. Listing endpoints\nreturn stored rows immediately and queue background work for the next unfetched page,\nso no request blocks on a scrape.\n\n**Reviews and ratings are always empty.** World of Books publishes no review or rating\nmarkup, and the assignment asks for reviews \"if present\" — so `review` stays unpopulated\nand `ratings_avg` stays null rather than being synthesised.\n\nLive scrape progress is pushed over Socket.IO on the `/api/ws` namespace, which is not\ndescribed here (OpenAPI covers HTTP only).",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "catalogue",
+      "description": "Navigation, categories, products and on-demand scraping"
+    },
+    {
+      "name": "products",
+      "description": "Paged product listing"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "Local development"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Navigation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 2
+          },
+          "title": {
+            "type": "string",
+            "example": "Fiction Books"
+          },
+          "slug": {
+            "type": "string",
+            "example": "fiction-books"
+          },
+          "last_scraped_at": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "slug",
+          "last_scraped_at"
+        ]
+      },
+      "ProductDetail": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "number",
+            "example": 41
+          },
+          "description": {
+            "type": "string",
+            "example": "A Court of Thorns and Roses by Sarah J Maas. Lose yourself in a world spun..."
+          },
+          "specs": {
+            "type": "object",
+            "description": "Metadata from the page's JSON-LD block and its \"Additional information\" table.",
+            "example": {
+              "isbn13": "9781408728512",
+              "isbn10": "1408728516",
+              "publisher": "Little, Brown Book Group",
+              "year_published": "2023-04-27",
+              "binding_type": "Paperback",
+              "condition": "Very Good",
+              "pages": 336,
+              "sku": "GOR013067345",
+              "category_path": "Fiction Books > Thriller & Suspense"
+            }
+          },
+          "ratings_avg": {
+            "type": "number",
+            "nullable": true,
+            "example": null,
+            "description": "Always null. World of Books publishes no rating markup, and the assignment asks for ratings \"if present\", so nothing is synthesised here."
+          },
+          "reviews_count": {
+            "type": "number",
+            "example": 0,
+            "description": "Always 0 — see ratings_avg."
+          }
+        },
+        "required": [
+          "product_id",
+          "description",
+          "specs",
+          "ratings_avg",
+          "reviews_count"
+        ]
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "author": {
+            "type": "string",
+            "example": "A. Reader"
+          },
+          "rating": {
+            "type": "number",
+            "example": 5,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "text": {
+            "type": "string",
+            "example": "Arrived in great condition."
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "rating",
+          "text",
+          "created_at"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 41
+          },
+          "source_id": {
+            "type": "string",
+            "example": "9846944432401",
+            "description": "The Shopify product id. Falls back to the URL handle when a page does not expose one."
+          },
+          "title": {
+            "type": "string",
+            "example": "A Court of Thorns and Roses"
+          },
+          "author": {
+            "type": "string",
+            "nullable": true,
+            "example": "Sarah J Maas",
+            "description": "Parsed from the Shopify handle — products.json carries no author field (vendor is always \"WoB\")."
+          },
+          "price": {
+            "type": "number",
+            "example": "4.10",
+            "description": "Cheapest in-stock variant, in major units."
+          },
+          "currency": {
+            "type": "string",
+            "example": "GBP"
+          },
+          "image_url": {
+            "type": "string",
+            "example": "https://cdn.shopify.com/s/files/1/0784/4072/6801/files/152668.jpg"
+          },
+          "source_url": {
+            "type": "string",
+            "example": "https://www.worldofbooks.com/en-gb/products/court-of-thorns-and-roses-book-sarah-j-maas-9780008387884"
+          },
+          "last_scraped_at": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "detail": {
+            "description": "Present once the product page has been scraped; detail is fetched lazily.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProductDetail"
+              }
+            ]
+          },
+          "reviews": {
+            "description": "Always empty — World of Books publishes no review markup.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Review"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "title",
+          "author",
+          "price",
+          "currency",
+          "image_url",
+          "source_url",
+          "last_scraped_at"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 11
+          },
+          "title": {
+            "type": "string",
+            "example": "Fantasy"
+          },
+          "slug": {
+            "type": "string",
+            "example": "fantasy-fiction-books"
+          },
+          "product_count": {
+            "type": "number",
+            "example": 0
+          },
+          "last_page_scraped": {
+            "type": "number",
+            "example": 1,
+            "description": "Listing checkpoint — the last products.json page fetched for this collection."
+          },
+          "is_exhausted": {
+            "type": "boolean",
+            "example": false,
+            "description": "True once a short page proves the collection has no further products."
+          },
+          "last_scraped_at": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          },
+          "navigation": {
+            "$ref": "#/components/schemas/Navigation"
+          },
+          "parent": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Category"
+              }
+            ]
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "slug",
+          "product_count",
+          "last_page_scraped",
+          "is_exhausted",
+          "last_scraped_at"
+        ]
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 400
+          },
+          "message": {
+            "description": "A single string, or one entry per failed constraint for validation errors.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": [
+              "limit may not exceed 100"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "example": "Bad Request"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error"
+        ]
+      },
+      "CategoryProductsDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "example": 428,
+            "description": "Total rows matching the query, ignoring paging."
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 24
+          },
+          "hasMore": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Scraping job queued for category: fantasy-fiction-books. Returning 24 existing products."
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "jobQueued": {
+            "type": "boolean",
+            "example": true,
+            "description": "True when a background listing scrape was queued. Only happens while the collection still has unfetched pages, so browsing an exhausted category costs the origin nothing."
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "limit",
+          "hasMore",
+          "message",
+          "products",
+          "jobQueued"
+        ]
+      },
+      "ScrapeNavigationResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Navigation scraping completed. Found 6 navigation items."
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Navigation"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ]
+      },
+      "ScrapeProductBodyDto": {
+        "type": "object",
+        "properties": {
+          "refresh": {
+            "type": "boolean",
+            "example": true,
+            "default": false,
+            "description": "Re-scrape the product page even if a stored detail row exists."
+          }
+        }
+      },
+      "ScrapeProductResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Product loaded successfully"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "hasDetails": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether a product_detail row is already stored."
+          },
+          "jobQueued": {
+            "type": "boolean",
+            "example": false,
+            "description": "Whether a detail scrape was queued."
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data",
+          "hasDetails",
+          "jobQueued"
+        ]
+      },
+      "ScrapeJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 7
+          },
+          "target_url": {
+            "type": "string",
+            "example": "https://www.worldofbooks.com/en-gb/collections/fantasy-fiction-books"
+          },
+          "target_type": {
+            "type": "string",
+            "example": "category",
+            "enum": [
+              "navigation",
+              "category",
+              "product",
+              "product_detail"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "completed",
+            "enum": [
+              "pending",
+              "processing",
+              "completed",
+              "failed"
+            ]
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "example": "2026-07-27T10:36:00.000Z"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "example": "2026-07-27T10:36:12.000Z"
+          },
+          "error_log": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "result_count": {
+            "type": "number",
+            "example": 40
+          },
+          "priority": {
+            "type": "string",
+            "example": "medium",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "target_url",
+          "target_type",
+          "status",
+          "started_at",
+          "finished_at",
+          "error_log"
+        ]
+      },
+      "CleanupResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "number",
+            "example": 12
+          },
+          "message": {
+            "type": "string",
+            "example": "Removed 12 stale rows"
+          }
+        },
+        "required": [
+          "deleted",
+          "message"
+        ]
+      },
+      "CacheClearResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Cache cleared successfully"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "timestamp"
+        ]
+      },
+      "HealthResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "OK"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-27T10:36:00.000Z"
+          },
+          "services": {
+            "type": "object",
+            "example": {
+              "database": "OK"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "services"
+        ]
+      },
+      "PaginatedProductsDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "example": 428,
+            "description": "Total rows matching the query, ignoring paging."
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 24
+          },
+          "hasMore": {
+            "type": "boolean",
+            "example": true
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "limit",
+          "hasMore",
+          "products"
+        ]
+      }
+    }
+  }
+}
