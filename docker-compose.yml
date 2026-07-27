@@ -1,6 +1,3 @@
-﻿# docker-compose.yml
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
@@ -12,6 +9,8 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Applied only when the data volume is first created. If tables go missing, recreate
+      # with `docker compose down -v`.
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U admin']
@@ -32,9 +31,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # OPTIONAL: Add backend service for production
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
@@ -48,15 +46,31 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PORT: 3001
+      NODE_ENV: production
       FRONTEND_URL: http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they are
+        # build args rather than runtime environment. They point at the published host ports,
+        # because the browser resolves them, not the compose network.
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+        NEXT_PUBLIC_WS_URL: ws://localhost:3001/api/ws
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Emits .next/standalone: a self-contained server with only the node_modules it actually
+  // needs, so the runtime image does not have to carry a full dependency tree.
+  output: 'standalone',
   images: {
     remotePatterns: [
       {

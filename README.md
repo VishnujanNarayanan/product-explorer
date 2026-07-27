@@ -34,22 +34,39 @@ requirements (`source_id`, `source_url`) map directly onto SQL constraints used 
 
 ## Quick start
 
+### Everything in Docker
+
 ```bash
 git clone <repository-url>
 cd product-explorer
+docker compose up -d --build
+```
 
+That brings up PostgreSQL, Redis, the backend and the frontend. No Node toolchain and no
+`playwright install` needed — the backend image ships Chromium and its system libraries.
+
+| | |
+| --- | --- |
+| Frontend | http://localhost:3000 |
+| API | http://localhost:3001 |
+| API docs | http://localhost:3001/api/docs |
+
+Load the fallback data once the stack is healthy:
+
+```bash
+docker compose exec backend node dist/database/seed.js
+```
+
+### Running locally instead
+
+```bash
 # 1. Environment files
 cp .env.example .env
 cp frontend/.env.example frontend/.env.local
 
-# 2. Start PostgreSQL + Redis
+# 2. Backing services only
 docker compose up -d postgres redis
-```
 
-> Start **only** `postgres` and `redis`. The compose file also declares a `backend` service that
-> builds from `backend/Dockerfile`, which does not exist yet — a bare `docker compose up` fails on it.
-
-```bash
 # 3. Backend
 cd backend
 npm ci
@@ -248,6 +265,29 @@ Two quirks the fixture faithfully reproduces rather than papers over:
 
 ---
 
+## Docker
+
+`docker compose up -d --build` builds and runs the whole stack. Both images are multi-stage, so
+build tooling never reaches the runtime layer, and both run as a non-root user.
+
+| Image | Base | Size | Notes |
+| --- | --- | --- | --- |
+| `backend` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | ~3.5 GB | Carries Chromium and its system libraries |
+| `frontend` | `node:22-alpine` | ~331 MB | Next.js `output: 'standalone'` |
+
+The backend uses Microsoft's Playwright image rather than a plain Node base. The scrapers drive a
+real browser, and a browser build that does not match the `playwright` package fails at launch
+with a misleading "install dependencies" error — so the image pins the pair together. Keep the
+`PLAYWRIGHT_VERSION` build arg in step with the `playwright` dependency in `package.json`.
+
+`NEXT_PUBLIC_*` values are compiled into the client bundle, so the frontend takes them as **build
+args**, not runtime environment. They point at the published host ports because the browser
+resolves them, not the compose network.
+
+The backend image declares a healthcheck against `/api/health`, and `frontend` waits on it.
+
+---
+
 ## Testing
 
 ```bash
@@ -271,7 +311,6 @@ npx ts-node scraper-smoke.ts detail   # detail + related products
 
 Tracked honestly rather than implied complete:
 
-- **No `backend/Dockerfile`**, so the compose `backend` service cannot build.
 - **Minimal automated tests** — one backend spec; no frontend specs yet.
 - **No CI pipeline.**
 - **Not deployed** — no hosted frontend or backend URL yet.

@@ -60,7 +60,11 @@ CREATE TABLE IF NOT EXISTS scrape_job (
   started_at TIMESTAMP,
   finished_at TIMESTAMP,
   error_log TEXT,
-  priority VARCHAR(20) DEFAULT 'medium'  -- ADDED: for queue priority
+  -- Rows produced by the job. The ScrapeJob entity has always declared this, but the column
+  -- was missing here: with NODE_ENV=development TypeORM's synchronize quietly added it, so the
+  -- gap only appeared in production, where every scrape failed on INSERT.
+  result_count INTEGER,
+  priority VARCHAR(20) DEFAULT 'medium'
 );
 
 CREATE TABLE IF NOT EXISTS view_history (
