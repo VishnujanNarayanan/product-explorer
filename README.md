@@ -1,13 +1,60 @@
 # Product Data Explorer
 
+[![CI](https://github.com/VishnujanNarayanan/product-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/VishnujanNarayanan/product-explorer/actions/workflows/ci.yml)
+
 A full-stack product exploration platform for [World of Books](https://www.worldofbooks.com/en-gb).
 Users drill down from navigation headings → categories → product listings → product detail, with
 data fetched by live, on-demand scraping and persisted to PostgreSQL.
 
 ```
 Navigation headings  →  Categories  →  Product grid  →  Product detail
-   (6 headings)         (113 links)     (250 / page)     (specs + related)
+   (6 headings)         (113 links)    (paged, 24/pg)    (specs + related)
 ```
+
+---
+
+## Architecture
+
+```
+                 ┌────────────────────────────────────────────┐
+   browser ──────▶  Next.js (App Router)          :3000       │
+                 │  SWR for fetching · Socket.IO for progress │
+                 └───────────────┬────────────────────────────┘
+                                 │ REST /api  +  WS /api/ws
+                 ┌───────────────▼────────────────────────────┐
+                 │  NestJS                        :3001       │
+                 │                                            │
+                 │  CoreController      navigation/categories │
+                 │  ProductsController  paged listing         │
+                 │      │ ValidationPipe (DTOs) on every input│
+                 │      ▼                                     │
+                 │  ScraperService ──enqueue──▶ BullMQ queue  │
+                 │      │                            │        │
+                 │      │ read-through cache         │ worker │
+                 └──────┼────────────────────────────┼────────┘
+                        ▼                            ▼
+                 ┌────────────┐            ┌───────────────────┐
+                 │ PostgreSQL │            │ Crawlee scrapers  │
+                 │  TypeORM   │◀──persist──│ Playwright / HTTP │
+                 └────────────┘            └─────────┬─────────┘
+                 ┌────────────┐                      │
+                 │   Redis    │◀──cache + queue      ▼
+                 └────────────┘             World of Books /en-gb
+```
+
+**Requests never block on a scrape.** A listing endpoint answers from PostgreSQL immediately and
+enqueues the *next* unfetched page on BullMQ; the worker scrapes, persists, and the following
+request sees more data. Redis holds both the queue and a per-page response cache.
+
+Key decisions and why:
+
+| Decision | Reasoning |
+| --- | --- |
+| **PostgreSQL**, not a document store | The domain is inherently relational — navigation owns categories, categories own products, products own detail — and the required uniqueness on `source_id`/`source_url` maps directly onto SQL constraints used for deduplication |
+| **Queue the scrape, serve stored data** | Keeps request latency independent of a third-party site that takes seconds per page |
+| **Checkpoint per category** (`last_page_scraped`, `is_exhausted`) | Browsing fills the catalogue progressively instead of bulk-downloading, and a finished collection stops generating traffic entirely |
+| **JSON feed for listings, browser for detail** | The listing grid is client-rendered by Algolia and never resolves headless; detail pages are server-rendered ([details](#why-listings-use-the-json-feed)) |
+| **Never cache an empty or failed result** | Otherwise one transient failure masquerades as a valid empty answer for the whole TTL |
 
 ---
 
@@ -15,10 +62,6 @@ Navigation headings  →  Categories  →  Product grid  →  Product detail
 
 **Backend** — NestJS, TypeScript, PostgreSQL (TypeORM), Redis, BullMQ, Crawlee, Playwright, Socket.IO
 **Frontend** — Next.js (App Router), React, TypeScript, Tailwind CSS, SWR, Socket.IO client
-
-PostgreSQL was chosen over a document store because the domain is inherently relational — navigation
-owns categories, categories own products, products own their detail — and the assignment's uniqueness
-requirements (`source_id`, `source_url`) map directly onto SQL constraints used for deduplication.
 
 ---
 
@@ -338,6 +381,59 @@ npx ts-node scraper-smoke.ts nav      # navigation + categories
 npx ts-node scraper-smoke.ts cat      # listing + checkpoint resume
 npx ts-node scraper-smoke.ts detail   # detail + related products
 ```
+
+---
+
+## Deployment
+
+> **Not currently deployed.** No hosted URL exists yet. What follows is the procedure, not a
+> description of something already running.
+
+The backend needs PostgreSQL, Redis, and roughly 2 GB of image space for Chromium — so it wants a
+container host (Render, Railway, Fly.io) rather than a serverless function platform. The frontend
+is a standard Next.js app and suits Vercel.
+
+**Backend** — deploy `backend/Dockerfile`, provision managed PostgreSQL and Redis, and set:
+
+| Variable | Value |
+| --- | --- |
+| `DB_HOST` `DB_PORT` `DB_USERNAME` `DB_PASSWORD` `DB_DATABASE` | from the managed database |
+| `REDIS_HOST` `REDIS_PORT` | from the managed Redis |
+| `PORT` | whatever the platform injects |
+| `NODE_ENV` | `production` |
+| `FRONTEND_URL` | the deployed frontend origin — this is the CORS allowlist, comma-separate for several |
+| `SCRAPE_ON_STARTUP` | `false` if you intend to seed rather than scrape on boot |
+
+`NODE_ENV=production` disables TypeORM `synchronize`, so the schema comes solely from
+`backend/database/schema.sql`. Apply it once against the fresh database:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/database/schema.sql
+```
+
+Then load the fallback data so the site is not empty on first visit:
+
+```bash
+npm run seed:prod      # runs dist/database/seed.js inside the deployed container
+```
+
+**Frontend** — deploy `frontend/`, or `frontend/Dockerfile` if the platform prefers a container.
+`NEXT_PUBLIC_*` values are compiled into the client bundle, so they must be set as **build-time**
+variables and the app **rebuilt** if they change:
+
+```
+NEXT_PUBLIC_API_URL=https://<backend-host>
+NEXT_PUBLIC_WS_URL=wss://<backend-host>/api/ws
+NEXT_PUBLIC_APP_URL=https://<frontend-host>
+```
+
+Two things that will bite otherwise:
+
+- `FRONTEND_URL` on the backend must exactly match the deployed frontend origin, or every request
+  fails CORS.
+- Use `wss://` rather than `ws://` from an HTTPS page; browsers block mixed-content WebSockets.
+
+Verify a deployment with `GET /api/health` (reports database connectivity) and `/api/docs`.
 
 ---
 
