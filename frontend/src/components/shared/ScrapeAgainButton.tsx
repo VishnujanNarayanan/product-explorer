@@ -19,9 +19,9 @@ interface ScrapeAgainButtonProps {
 }
 
 export function ScrapeAgainButton({
-  categorySlug,
+  categorySlug: _categorySlug,
   categoryTitle,
-  navigationSlug,
+  navigationSlug: _navigationSlug,
   onScrapeComplete,
   className,
   variant = "default",

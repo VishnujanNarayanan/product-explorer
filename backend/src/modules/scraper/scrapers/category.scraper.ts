@@ -90,7 +90,7 @@ export class CategoryScraper extends BaseScraper {
         let payload: any;
         try {
           payload = typeof body === 'string' ? JSON.parse(body) : JSON.parse(body.toString('utf8'));
-        } catch (err) {
+        } catch {
           throw new Error(`Non-JSON response for ${categorySlug} page ${pageNo}`);
         }
 

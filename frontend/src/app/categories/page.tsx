@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { CategoryCard } from "@/components/category/CategoryCard"
 import { useCategories } from "@/lib/hooks/useCategories"

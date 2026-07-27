@@ -1,7 +1,7 @@
 "use client"
 
 import { Clock, Eye, Trash2 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { useHistory } from "@/lib/hooks/useHistory"
 import { formatDateTime } from "@/lib/utils"

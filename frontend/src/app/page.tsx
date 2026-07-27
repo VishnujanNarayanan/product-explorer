@@ -53,7 +53,7 @@ export default function Home() {
           window.location.reload()
         }, 2000)
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to refresh navigation",

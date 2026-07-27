@@ -1,6 +1,5 @@
 import useSWR from 'swr';
 import { navigationAPI } from '@/lib/api/navigation';
-import { Category } from '@/lib/types';
 
 export const useCategories = (navigationSlug?: string) => {
   const key = navigationSlug 

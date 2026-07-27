@@ -288,12 +288,26 @@ The backend image declares a healthcheck against `/api/health`, and `frontend` w
 
 ---
 
-## Testing
+## Testing and CI
 
 ```bash
-cd backend  && npx tsc --noEmit && npm test
-cd frontend && npx tsc --noEmit && npm test && npm run build
+cd backend  && npm run lint && npx tsc --noEmit && npm test
+cd frontend && npm run lint && npx tsc --noEmit && npm test && npm run build
 ```
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request to
+`main`, in three parallel jobs:
+
+| Job | Does |
+| --- | --- |
+| **backend** | lint → typecheck → test → build → seed smoke test |
+| **frontend** | lint → typecheck → test → build |
+| **docker** | builds both images, with layer caching |
+
+The backend job runs against real PostgreSQL and Redis service containers rather than mocks, and
+applies `schema.sql` explicitly — so a schema that drifts from the entities fails the build. It
+finishes by running the seed, which proves the fallback fixture still loads against the current
+schema.
 
 `backend/scraper-smoke.ts` exercises each scraper against the live site with no database or Nest
 container — useful when the site's markup drifts:
@@ -312,5 +326,9 @@ npx ts-node scraper-smoke.ts detail   # detail + related products
 Tracked honestly rather than implied complete:
 
 - **Minimal automated tests** — one backend spec; no frontend specs yet.
-- **No CI pipeline.**
+- **Three `react-hooks/set-state-in-effect` warnings.** `WebSocketStatus` and
+  `useInteractiveScraper` mirror the Socket.IO client into React state, where
+  `useSyncExternalStore` is the right tool, and `useSearch` flips a flag inside its debounce
+  timer. Real findings, deliberately left as warnings rather than rewritten blind — that
+  refactor wants test coverage behind it first.
 - **Not deployed** — no hosted frontend or backend URL yet.

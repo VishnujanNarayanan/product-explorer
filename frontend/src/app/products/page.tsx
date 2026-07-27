@@ -40,7 +40,7 @@ function ProductsPageContent() {
     getCachedProducts,
     hasMore: wsHasMore,
     isLoading: isWsLoading,
-    error: wsError,
+    error: _wsError,
   } = useInteractiveScraper()
 
   // State

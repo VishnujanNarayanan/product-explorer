@@ -1,6 +1,5 @@
 import useSWR from 'swr';
 import { navigationAPI } from '@/lib/api/navigation';
-import { Navigation } from '@/lib/types';
 
 export const useNavigation = () => {
   const { data, error, isLoading, mutate } = useSWR(

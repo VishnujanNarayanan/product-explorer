@@ -297,47 +297,52 @@ export class ScraperService implements OnModuleInit {
 
     try {
       switch (type) {
-        case 'navigation':
+        // Each branch is braced: a bare `const` in a case body is scoped to the whole switch,
+        // so it stays in the temporal dead zone for the other branches.
+        case 'navigation': {
           const url = target || this.BASE_URL;
-          await this.scrapingQueue.add('scrape-navigation', { 
+          await this.scrapingQueue.add('scrape-navigation', {
             jobId: job.id,
             url
           });
           break;
-        
-        case 'category':
-          const category = await this.categoryRepo.findOne({ 
-            where: { slug: target } 
+        }
+
+        case 'category': {
+          const category = await this.categoryRepo.findOne({
+            where: { slug: target }
           });
-          
+
           if (!category) {
-            throw new Error(`Category not found: ${target}`);
+            throw new NotFoundException(`Category not found: ${target}`);
           }
-          
-          await this.scrapingQueue.add('scrape-category', { 
+
+          await this.scrapingQueue.add('scrape-category', {
             categorySlug: target,
             categoryId: category.id,
             url: `${this.BASE_URL}/collections/${target}`,
-            jobId: job.id 
+            jobId: job.id
           });
           break;
-        
-        case 'product':
-          const product = await this.productRepo.findOne({ 
-            where: { source_id: target } 
+        }
+
+        case 'product': {
+          const product = await this.productRepo.findOne({
+            where: { source_id: target }
           });
-          
+
           if (!product) {
-            throw new Error(`Product not found: ${target}`);
+            throw new NotFoundException(`Product not found: ${target}`);
           }
-          
-          await this.scrapingQueue.add('scrape-product-detail', { 
+
+          await this.scrapingQueue.add('scrape-product-detail', {
             sourceId: target,
             productId: product.id,
             url: product.source_url,
-            jobId: job.id 
+            jobId: job.id
           });
           break;
+        }
       }
 
       return {

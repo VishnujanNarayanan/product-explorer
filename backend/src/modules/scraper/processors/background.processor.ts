@@ -86,7 +86,7 @@ export class BackgroundScraperProcessor {
    * Medium priority: Refresh stale categories (> 24 hours old)
    */
   @Process('refresh-stale')
-  async handleStaleRefresh(job: Job<BackgroundScrapeJob>) {
+  async handleStaleRefresh(_job: Job<BackgroundScrapeJob>) {
     this.logger.log('[MEDIUM] Refreshing stale categories');
     
     // Find categories not scraped in last 24 hours
@@ -129,7 +129,7 @@ export class BackgroundScraperProcessor {
    * Low priority: Full site scan (all categories)
    */
   @Process('full-scan')
-  async handleFullSiteScan(job: Job<BackgroundScrapeJob>) {
+  async handleFullSiteScan(_job: Job<BackgroundScrapeJob>) {
     this.logger.log('[LOW] Starting full site scan');
     
     // Get all categories
@@ -169,7 +169,7 @@ export class BackgroundScraperProcessor {
    * High priority: Navigation refresh
    */
   @Process('refresh-navigation')
-  async handleNavigationRefresh(job: Job<BackgroundScrapeJob>) {
+  async handleNavigationRefresh(_job: Job<BackgroundScrapeJob>) {
     this.logger.log('[HIGH] Refreshing navigation data');
     
     const scrapeJob = await this.scrapeJobRepo.save({

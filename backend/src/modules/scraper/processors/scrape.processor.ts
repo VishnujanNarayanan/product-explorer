@@ -80,7 +80,7 @@ export class ScrapeProcessor {
 
   @Process('scrape-category')
   async handleCategoryScrape(job: Job) {
-    const { categorySlug, categoryId, url, jobId, navigationSlug } = job.data;
+    const { categorySlug, categoryId, jobId, navigationSlug } = job.data;
     this.logger.log(`Processing category scrape: ${categorySlug}${navigationSlug ? ` (via nav: ${navigationSlug})` : ''}`);
     
     try {
@@ -213,7 +213,7 @@ export class ScrapeProcessor {
       }
 
       // Save or update product detail
-      let existingDetail = await this.productDetailRepo.findOne({
+      const existingDetail = await this.productDetailRepo.findOne({
         where: { product_id: product.id },
       });
 

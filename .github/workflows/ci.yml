@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to a PR makes the previous run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    # The integration test talks to a real PostgreSQL rather than a mock, so the schema and
+    # the queries are exercised together. Redis backs the BullMQ queue the app opens on boot.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: wob_explorer
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: admin
+      DB_PASSWORD: password
+      DB_DATABASE: wob_explorer
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        working-directory: backend
+        run: npm ci
+
+      # The Postgres service container has no init hook, so apply the schema explicitly —
+      # which also proves schema.sql stays valid.
+      - name: Apply database schema
+        run: psql "postgresql://admin:password@localhost:5432/wob_explorer" -v ON_ERROR_STOP=1 -f backend/database/schema.sql
+
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: backend
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: backend
+        run: npm test -- --ci
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+      # Proves the fallback fixture still loads against the current schema and entities.
+      - name: Seed smoke test
+        working-directory: backend
+        run: npm run seed
+
+  frontend:
+    name: Frontend — lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: frontend
+        run: npm test -- --ci --passWithNoTests
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only — pushing images is out of scope. Layer caching keeps the Playwright base
+      # from being pulled on every run.
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

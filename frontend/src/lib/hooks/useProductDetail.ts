@@ -1,6 +1,5 @@
 import useSWR from 'swr';
 import { productsAPI } from '@/lib/api/products';
-import { Product } from '@/lib/types';
 
 export const useProductDetail = (sourceId: string) => {
   const { data, error, isLoading, mutate } = useSWR(
