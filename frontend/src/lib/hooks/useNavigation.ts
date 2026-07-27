@@ -24,8 +24,14 @@ export const useNavigation = () => {
         mutate();
       }
       return result;
-    } catch (error) {
-      console.error('Failed to refresh navigation:', error);
+    } catch (error: any) {
+      const errorLog = {
+        message: error.message || 'unknown',
+        status: error.status || 'none',
+        code: error.code || 'unknown',
+        originalError: error.originalError ? error.originalError.toString() : null,
+      };
+      console.error('Failed to refresh navigation: ' + JSON.stringify(errorLog, null, 2));
       throw error;
     }
   };

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { CategoryCard } from "@/components/category/CategoryCard"
 import { useCategories } from "@/lib/hooks/useCategories"
@@ -12,7 +12,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { Button } from "@/components/ui/Button"
 import { RefreshCw, ArrowLeft, Loader2, LayoutGrid } from "lucide-react"
 
-export default function CategoriesPage() {
+function CategoriesPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const navigationSlug = searchParams.get('navigation')
@@ -197,5 +197,19 @@ export default function CategoriesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CategoriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-24">
+          <LoadingSpinner size="lg" />
+        </div>
+      }
+    >
+      <CategoriesPageContent />
+    </Suspense>
   )
 }

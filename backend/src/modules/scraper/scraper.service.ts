@@ -24,6 +24,8 @@ import { ScrapeJob } from '../../entities/scrape-job.entity';
 export class ScraperService implements OnModuleInit {
   private readonly logger = new Logger(ScraperService.name);
   private readonly BASE_URL = 'https://www.worldofbooks.com';
+  // World of Books serves all content under a locale prefix; omitting it redirects.
+  private readonly LOCALE = '/en-gb';
 
   constructor(
     private readonly navigationScraper: NavigationScraper,
@@ -75,13 +77,19 @@ export class ScraperService implements OnModuleInit {
         started_at: new Date(),
       });
 
-      const { navigation, categories } = await this.navigationScraper.scrape(this.BASE_URL);
+      // Must be locale-qualified: the bare domain redirects and serves a reduced menu.
+      const { navigation, categories } = await this.navigationScraper.scrape(
+        `${this.BASE_URL}${this.LOCALE}`,
+      );
       
       const savedNavigation: Navigation[] = [];
       for (const navItem of navigation) {
         const existing = await this.navigationRepo.findOne({ where: { slug: navItem.slug } });
         
         if (existing) {
+          // Refresh the title too — a row may predate a change in how titles are read,
+          // and only bumping the timestamp would leave stale text on the site forever.
+          existing.title = navItem.title;
           existing.last_scraped_at = new Date();
           await this.navigationRepo.save(existing);
           savedNavigation.push(existing);
@@ -106,6 +114,8 @@ export class ScraperService implements OnModuleInit {
         });
 
         if (existingCategory) {
+          existingCategory.title = categoryItem.title;
+          if (parentNav) existingCategory.navigation = parentNav;
           existingCategory.last_scraped_at = new Date();
           await this.categoryRepo.save(existingCategory);
         } else if (parentNav) {
@@ -124,12 +134,20 @@ export class ScraperService implements OnModuleInit {
         finished_at: new Date(),
       });
 
-      await this.cacheManager.set(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
+      // Never cache an empty result. A failed scrape used to be cached as valid, so every
+      // retry within the TTL returned "cached" zero items and looked like a broken scraper.
+      if (savedNavigation.length > 0) {
+        await this.cacheManager.set(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
+      } else {
+        this.logger.warn('Navigation scrape returned no items — not caching');
+      }
 
       this.logger.log(`Navigation scraping completed: ${savedNavigation.length} nav items, ${categories.length} categories saved`);
       return savedNavigation;
     } catch (error) {
       this.logger.error(`Navigation scraping failed: ${error.message}`);
+      // Drop any stale entry so the next call retries instead of serving a bad cache hit.
+      await this.cacheManager.del(cacheKey).catch(() => undefined);
       throw error;
     }
   }
@@ -141,35 +159,39 @@ export class ScraperService implements OnModuleInit {
     jobQueued: boolean;
   }> {
     const cacheKey = `category_${slug}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    
-    if (cached) {
+    const cached = await this.cacheManager.get<Product[]>(cacheKey);
+
+    // Only serve a cache hit that actually has products; an empty array means the previous
+    // scrape failed and must not suppress a retry.
+    if (Array.isArray(cached) && cached.length > 0) {
       this.logger.log(`Returning cached products for category: ${slug}`);
       return {
         message: `Returning cached products for ${slug}`,
-        products: cached as Product[],
+        products: cached,
         jobQueued: false
       };
     }
 
-    const category = await this.categoryRepo.findOne({ 
+    const category = await this.categoryRepo.findOne({
       where: { slug },
       relations: ['navigation']
     });
-    
+
     if (!category) {
       throw new Error(`Category not found: ${slug}`);
     }
 
-    // Get navigation slug for proper site navigation
-    const navigationSlug = category.navigation?.slug || null;
-
-    await this.scrapingQueue.add('scrape-category', {
-      categorySlug: slug,
-      categoryId: category.id,
-      navigationSlug: navigationSlug,
-      url: `${this.BASE_URL}/collections/${slug}`,
-    });
+    // Queue another page only while the collection still has one. Fully-scraped categories
+    // are served from the DB, so browsing them costs World of Books nothing.
+    const jobQueued = !category.is_exhausted;
+    if (jobQueued) {
+      await this.scrapingQueue.add('scrape-category', {
+        categorySlug: slug,
+        categoryId: category.id,
+        navigationSlug: category.navigation?.slug || null,
+        url: this.collectionUrl(slug),
+      });
+    }
 
     const products = await this.productRepo.find({
       where: { category: { id: category.id } },
@@ -177,14 +199,22 @@ export class ScraperService implements OnModuleInit {
       take: 50
     });
 
-    await this.cacheManager.set(cacheKey, products, 60 * 60 * 1000);
-    
+    if (products.length > 0) {
+      await this.cacheManager.set(cacheKey, products, 60 * 60 * 1000);
+    }
+
     return {
-      message: `Scraping job queued for category: ${slug}. Returning ${products.length} existing products.`,
+      message: jobQueued
+        ? `Scraping job queued for category: ${slug}. Returning ${products.length} existing products.`
+        : `Category ${slug} fully scraped. Returning ${products.length} products.`,
       products,
       category,
-      jobQueued: true
+      jobQueued
     };
+  }
+
+  private collectionUrl(slug: string): string {
+    return `${this.BASE_URL}${this.LOCALE}/collections/${slug}`;
   }
 
   async scrapeProductBySourceId(sourceId: string, forceRefresh = false): Promise<Product | null> {

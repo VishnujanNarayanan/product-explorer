@@ -47,16 +47,24 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    const { response, config } = error;
+    const { response, config, message } = error;
     const requestId = config?.headers?.['X-Request-ID'];
     
-    console.error('API Error:', {
-      requestId,
-      url: config?.url,
-      method: config?.method,
-      status: response?.status,
-      data: response?.data,
-    });
+    // Build comprehensive error object for logging with default values
+    const errorDetails = {
+      requestId: requestId || 'unknown',
+      url: config?.url || 'unknown',
+      method: config?.method || 'unknown',
+      status: response?.status || 'none',
+      statusText: response?.statusText || 'no status',
+      message: message || 'no message',
+      responseData: response?.data || null,
+      errorName: error.name || 'unknown',
+      errorCode: error.code || 'unknown',
+    };
+    
+    // Log as string to bypass Next.js console interception
+    console.error('API Error: ' + JSON.stringify(errorDetails, null, 2));
     
     if (response) {
       // Handle specific status codes
@@ -68,13 +76,13 @@ apiClient.interceptors.response.use(
           console.warn('Forbidden - insufficient permissions');
           break;
         case 404:
-          console.warn('Resource not found');
+          console.warn('Resource not found:', config?.url);
           break;
         case 429:
           console.warn('Rate limited - too many requests');
           break;
         case 500:
-          console.error('Server error');
+          console.error('Server error:', response.data?.message);
           break;
         case 502:
         case 503:
@@ -91,8 +99,16 @@ apiClient.interceptors.response.use(
       
       error.userMessage = errorMessage;
     } else if (error.request) {
+      console.error('No response received from server', {
+        message: error.message,
+        code: error.code,
+        url: config?.url,
+      });
       error.userMessage = 'No response received from server. Please check your connection.';
     } else {
+      console.error('Request configuration error', {
+        message: error.message,
+      });
       error.userMessage = 'Failed to make request. Please try again.';
     }
     
@@ -130,16 +146,34 @@ export async function apiRequest<T>(
     
     return response.data;
   } catch (error: any) {
-    // Re-throw with user-friendly message
+    // Extract comprehensive error information
+    const statusCode = error.response?.status;
+    const errorData = error.response?.data;
     const userMessage = error.userMessage || 
-                       error.response?.data?.message || 
+                       errorData?.message || 
+                       errorData?.error || 
                        error.message || 
                        'An unexpected error occurred';
     
+    // Log detailed error for debugging with proper serialization
+    const errorLog = {
+      url: url || 'unknown',
+      method: method || 'unknown',
+      statusCode: statusCode || 'none',
+      userMessage: userMessage || 'unknown error',
+      fullError: {
+        name: error.name || 'unknown',
+        message: error.message || 'unknown',
+        code: error.code || 'unknown',
+      }
+    };
+    console.error('apiRequest error: ' + JSON.stringify(errorLog, null, 2));
+    
     const enhancedError = new Error(userMessage);
     enhancedError.name = error.name || 'APIError';
-    (enhancedError as any).status = error.response?.status;
+    (enhancedError as any).status = statusCode;
     (enhancedError as any).code = error.code;
+    (enhancedError as any).originalError = error;
     
     throw enhancedError;
   }

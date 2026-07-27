@@ -14,6 +14,7 @@ import { CategoryScraper } from './scrapers/category.scraper';
 import { ProductScraper } from './scrapers/product.scraper';
 import { ProductDetailScraper } from './scrapers/product-detail.scraper';
 import { InteractiveScraper } from './scrapers/interactive.scraper';
+import { WebSocketGateway } from '../../websocket/websocket.gateway';
 
 import { Navigation } from '../../entities/navigation.entity';
 import { Category } from '../../entities/category.entity';
@@ -94,6 +95,9 @@ import { ViewHistory } from '../../entities/view-history.entity';
     ProductScraper,
     ProductDetailScraper,
     InteractiveScraper,
+
+    // Real-time updates
+    WebSocketGateway,
   ],
   exports: [
     ScraperService,

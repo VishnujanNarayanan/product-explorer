@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS category (
   title VARCHAR(255) NOT NULL,
   slug VARCHAR(255) UNIQUE NOT NULL,
   product_count INTEGER DEFAULT 0,
+  -- Listing checkpoint: last products.json page fetched, and whether the collection is done.
+  last_page_scraped INTEGER DEFAULT 0,
+  is_exhausted BOOLEAN DEFAULT FALSE,
   last_scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   navigation_id INTEGER REFERENCES navigation(id),
   parent_id INTEGER REFERENCES category(id)
@@ -23,6 +26,7 @@ CREATE TABLE IF NOT EXISTS product (
   id SERIAL PRIMARY KEY,
   source_id VARCHAR(255) UNIQUE NOT NULL,
   title TEXT NOT NULL,
+  author VARCHAR(255),
   price DECIMAL(10, 2),
   currency VARCHAR(10) DEFAULT 'GBP',
   image_url TEXT,

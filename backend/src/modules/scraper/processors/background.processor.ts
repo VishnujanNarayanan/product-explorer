@@ -5,7 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, IsNull } from 'typeorm';
 
-import { CategoryScraper } from '../scrapers/category.scraper';
+import { CategoryScraper, CategoryScrapeResult } from '../scrapers/category.scraper';
 import { NavigationScraper } from '../scrapers/navigation.scraper';
 
 import { Navigation } from '../../../entities/navigation.entity';
@@ -56,21 +56,20 @@ export class BackgroundScraperProcessor {
     });
 
     try {
-      // Scrape with higher priority (shorter delays)
-      const products = await this.categoryScraper.scrape(
-        `https://www.worldofbooks.com/collections/${target}`,
-        target,
-        120 // Max products
-      );
+      // Pull a couple of pages for a user-triggered refresh; resumes from the checkpoint.
+      const result = await this.categoryScraper.scrape(target, {
+        startPage: await this.nextPageFor(target),
+        maxPages: 2,
+      });
 
-      await this.saveCategoryProducts(target, products);
-      
+      await this.saveCategoryProducts(target, result);
+
       await this.scrapeJobRepo.update(scrapeJob.id, {
         status: 'completed',
         finished_at: new Date(),
       });
 
-      this.logger.log(`[HIGH] Category ${target} refreshed: ${products.length} products`);
+      this.logger.log(`[HIGH] Category ${target} refreshed: ${result.products.length} products`);
       
     } catch (error) {
       this.logger.error(`[HIGH] Failed to refresh category ${target}:`, error);
@@ -106,18 +105,15 @@ export class BackgroundScraperProcessor {
 
     for (const category of staleCategories) {
       try {
-        // Scrape with normal delays
-        const products = await this.categoryScraper.scrape(
-          `https://www.worldofbooks.com/collections/${category.slug}`,
-          category.slug,
-          40, // Less products for background refresh
-          undefined,
+        // One page per stale category, resuming where the last run stopped.
+        const result = await this.categoryScraper.scrape(category.slug, {
+          startPage: (category.last_page_scraped || 0) + 1,
+          maxPages: 1,
+        });
 
-        );
+        await this.saveCategoryProducts(category.slug, result);
 
-        await this.saveCategoryProducts(category.slug, products);
-        
-        this.logger.log(`[MEDIUM] Refreshed stale category ${category.slug}: ${products.length} products`);
+        this.logger.log(`[MEDIUM] Refreshed stale category ${category.slug}: ${result.products.length} products`);
         
         // Small delay between categories
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -146,19 +142,16 @@ export class BackgroundScraperProcessor {
     let processed = 0;
     for (const category of allCategories) {
       try {
-        // Very slow scraping for background (respectful to target site)
-        const products = await this.categoryScraper.scrape(
-          `https://www.worldofbooks.com/collections/${category.slug}`,
-          category.slug,
-          20, // Very few products for full scan
-          undefined,
+        // Very slow background scan: one page per category, respectful to the target site.
+        const result = await this.categoryScraper.scrape(category.slug, {
+          startPage: await this.nextPageFor(category.slug),
+          maxPages: 1,
+        });
 
-        );
+        await this.saveCategoryProducts(category.slug, result);
 
-        await this.saveCategoryProducts(category.slug, products);
-        
         processed++;
-        this.logger.log(`[LOW] Scanned ${category.slug} (${processed}/${allCategories.length}): ${products.length} products`);
+        this.logger.log(`[LOW] Scanned ${category.slug} (${processed}/${allCategories.length}): ${result.products.length} products`);
         
         // Long delay between categories for full scan
         await new Promise(resolve => setTimeout(resolve, 10000));
@@ -251,7 +244,10 @@ export class BackgroundScraperProcessor {
     }
   }
 
-  private async saveCategoryProducts(categorySlug: string, products: any[]): Promise<void> {
+  private async saveCategoryProducts(
+    categorySlug: string,
+    result: CategoryScrapeResult,
+  ): Promise<void> {
     const category = await this.categoryRepo.findOne({
       where: { slug: categorySlug },
     });
@@ -263,8 +259,8 @@ export class BackgroundScraperProcessor {
 
     let saved = 0;
     let updated = 0;
-    
-    for (const productData of products) {
+
+    for (const productData of result.products) {
       try {
         const existingProduct = await this.productRepo.findOne({
           where: { source_id: productData.source_id },
@@ -273,6 +269,7 @@ export class BackgroundScraperProcessor {
         if (existingProduct) {
           // Update
           existingProduct.title = productData.title;
+          existingProduct.author = productData.author;
           existingProduct.price = productData.price;
           existingProduct.image_url = productData.image_url;
           existingProduct.last_scraped_at = new Date();
@@ -283,6 +280,7 @@ export class BackgroundScraperProcessor {
           const newProduct = this.productRepo.create({
             source_id: productData.source_id,
             title: productData.title,
+            author: productData.author,
             price: productData.price,
             currency: productData.currency || 'GBP',
             image_url: productData.image_url || '',
@@ -298,13 +296,25 @@ export class BackgroundScraperProcessor {
       }
     }
 
-    // Update category stats
-    category.product_count = await this.productRepo.count({ 
-      where: { category: { id: category.id } } 
+    // Advance the checkpoint only after the page's products are persisted.
+    if (result.nextPage) {
+      category.last_page_scraped = result.nextPage - 1;
+    } else {
+      category.last_page_scraped = category.last_page_scraped + result.pagesFetched;
+    }
+    category.is_exhausted = result.exhausted;
+    category.product_count = await this.productRepo.count({
+      where: { category: { id: category.id } }
     });
     category.last_scraped_at = new Date();
     await this.categoryRepo.save(category);
 
     this.logger.log(`Saved ${saved} new, updated ${updated} products for ${categorySlug}`);
+  }
+
+  /** Next unfetched listing page for a category, from its stored checkpoint. */
+  private async nextPageFor(categorySlug: string): Promise<number> {
+    const category = await this.categoryRepo.findOne({ where: { slug: categorySlug } });
+    return (category?.last_page_scraped || 0) + 1;
   }
 }

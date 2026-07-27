@@ -1,7 +1,7 @@
 // frontend/src/app/products/page.tsx - COMPLETE VERSION
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ProductGrid } from "@/components/product/ProductGrid"
 import { Breadcrumb } from "@/components/shared/Breadcrumb"
@@ -16,7 +16,7 @@ import { ScrapeAgainButton } from "@/components/shared/ScrapeAgainButton"
 import { useToast } from "@/lib/hooks/useToast"
 import { RefreshCw, ArrowLeft, Loader2, ShoppingBag, Sparkles } from "lucide-react"
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const categorySlug = searchParams.get('category')
@@ -521,5 +521,19 @@ export default function ProductsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-24">
+          <LoadingSpinner size="lg" />
+        </div>
+      }
+    >
+      <ProductsPageContent />
+    </Suspense>
   )
 }

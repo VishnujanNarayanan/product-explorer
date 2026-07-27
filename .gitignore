@@ -1,51 +1,65 @@
-# Create .gitignore file
-@"
-# Dependencies
+# ---------- Dependencies ----------
 node_modules/
 .pnp
 .pnp.js
-dist/
-# Environment
-.env.
+
+# ---------- Environment / secrets ----------
+# Never commit real credentials. .env.example is tracked as the template.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
-
-# Crawlee storage
-backend/storage/
-
-
-# Logs
-logs/
-*.log
-
-# Build outputs
+# ---------- Build output ----------
 dist/
 build/
-.next/
 out/
+.next/
+backend/test-build/
+*.tsbuildinfo
 
-# Database
+# ---------- Crawlee / Playwright runtime state ----------
+backend/storage/
+.crawlee/
+playwright-report/
+test-results/
+
+# ---------- Scraper debug artifacts ----------
+# Saved pages and screenshots captured while working out selectors.
+*-debug.html
+*-debug.png
+page-screenshot.png
+navigation-results.json
+new-navigation-results.json
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------- Testing ----------
+coverage/
+.nyc_output/
+frontend/cypress/videos/
+frontend/cypress/screenshots/
+
+# ---------- Databases ----------
 *.db
 *.sqlite
 
-# IDE
+# ---------- Editors ----------
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# ---------- OS ----------
 .DS_Store
 Thumbs.db
+# WSL/Windows alternate-data-stream markers
+*:Zone.Identifier
 
-# Testing
-coverage/
-.nyc_output/
-
-# Misc
+# ---------- Misc ----------
 *.tgz
-"@ | Out-File -FilePath .gitignore -Encoding UTF8
+*.docx
