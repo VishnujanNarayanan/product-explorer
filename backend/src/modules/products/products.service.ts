@@ -3,6 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../../entities/product.entity';
 
+export interface PaginatedProducts {
+  products: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -10,23 +18,32 @@ export class ProductsService {
     private productRepository: Repository<Product>,
   ) {}
 
-  async getProductsByCategory(categorySlug: string) {
-    return this.productRepository.find({
-      where: { category: { slug: categorySlug } },
+  /**
+   * Listing endpoints are paged. Previously they returned every matching row, which meant a
+   * single request could pull the whole catalogue into memory as the scraper fills it up.
+   */
+  async getProducts(options: {
+    categorySlug?: string;
+    page: number;
+    limit: number;
+  }): Promise<PaginatedProducts> {
+    const { categorySlug, page, limit } = options;
+
+    const [products, total] = await this.productRepository.findAndCount({
+      where: categorySlug ? { category: { slug: categorySlug } } : {},
       relations: ['category'],
+      order: { id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      products,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    };
   }
 
-  async getAllProducts() {
-    return this.productRepository.find({
-      relations: ['category'],
-    });
-  }
-
-  async getProductBySourceId(sourceId: string) {
-    return this.productRepository.findOne({
-      where: { source_id: sourceId },
-      relations: ['category', 'detail', 'reviews'],
-    });
-  }
 }

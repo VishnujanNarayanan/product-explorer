@@ -102,21 +102,44 @@ configured with `envFilePath: ['.env', '../.env']`.
 
 Base URL `http://localhost:3001`.
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/health` | Liveness + database connectivity |
-| `GET` | `/api/navigation` | Navigation headings with their categories |
-| `GET` | `/api/categories` | All categories |
-| `GET` | `/api/categories/:slug` | One category |
-| `GET` | `/api/categories/:slug/products` | Products in a category |
-| `GET` | `/api/products/:id` | Product with detail and related items |
-| `POST` | `/api/scrape/navigation` | Re-scrape navigation |
-| `POST` | `/api/scrape/category/:slug` | Queue a listing scrape (returns immediately) |
-| `POST` | `/api/scrape/product/:sourceId` | Queue a detail scrape |
-| `GET` | `/api/jobs/:id` | Scrape job status |
-| `POST` | `/api/cache/clear` | Drop cached responses |
+| Method | Endpoint | Query | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | | Liveness + database connectivity |
+| `GET` | `/api/navigation` | | Navigation headings with their categories |
+| `GET` | `/api/categories` | `navigation` | All categories, optionally one heading's |
+| `GET` | `/api/categories/:slug` | | One category |
+| `GET` | `/api/categories/:slug/products` | `page`, `limit` | Products in a category |
+| `GET` | `/api/products` | `category`, `page`, `limit` | Paged product listing |
+| `GET` | `/api/products/:sourceId` | `refresh` | Product with detail, scraping on demand |
+| `POST` | `/api/scrape/navigation` | | Re-scrape navigation |
+| `POST` | `/api/scrape/category/:slug` | `page`, `limit` | Queue a listing scrape (returns immediately) |
+| `POST` | `/api/scrape/product/:sourceId` | | Queue a detail scrape; body `{ "refresh": bool }` |
+| `GET` | `/api/jobs/:id` | | Scrape job status |
+| `POST` | `/api/cleanup` | | Drop stale rows |
+| `POST` | `/api/cache/clear` | | Drop cached responses |
 
 Real-time scrape progress is pushed over Socket.IO on the `/api/ws` namespace.
+
+### Validation and error handling
+
+Every path parameter, query string and request body is bound to a `class-validator` DTO, checked
+by a global `ValidationPipe` configured with `whitelist`, `forbidNonWhitelisted` and `transform`.
+Unknown properties are rejected rather than silently ignored, so a typo'd parameter is an error
+instead of a surprise.
+
+```
+GET /api/products?limit=9999   → 400  ["limit may not exceed 100"]
+GET /api/products?bogus=1      → 400  ["property bogus should not exist"]
+GET /api/jobs/notanumber       → 400  ["id must be an integer"]
+GET /api/categories/nope       → 404  Category not found: nope
+```
+
+Listing endpoints are paged (`page` ≥ 1, `limit` 1–100, default 24) and return
+`{ products, total, page, limit, hasMore }`. Paged responses are cached per page, so requesting
+page 2 cannot be served page 1's rows.
+
+Requests that fail for a client-side reason answer `400` or `404`; only genuine server faults
+become a `500`, and their detail goes to the log rather than the response body.
 
 ---
 

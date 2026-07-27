@@ -13,6 +13,7 @@ import { ScrapeJob } from './entities/scrape-job.entity';
 import { ScraperSession } from './entities/scraper-session.entity';
 import { ViewHistory } from './entities/view-history.entity';
 import { CoreModule } from './modules/core/core.module';
+import { ProductsModule } from './modules/products/products.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
 
 @Module({
@@ -49,6 +50,9 @@ import { ScraperModule } from './modules/scraper/scraper.module';
       },
     }),
     CoreModule,
+    // Was never registered, so GET /api/products returned 404 for every caller — including
+    // the frontend's own getAllProducts().
+    ProductsModule,
     ScraperModule, // WebSocketGateway should be provided by ScraperModule
   ],
   controllers: [AppController],

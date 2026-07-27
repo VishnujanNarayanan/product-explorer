@@ -1,5 +1,5 @@
 import type { Queue } from 'bull';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
@@ -152,23 +152,44 @@ export class ScraperService implements OnModuleInit {
     }
   }
 
-  async scrapeCategoryBySlug(slug: string): Promise<{ 
-    message: string; 
+  async scrapeCategoryBySlug(
+    slug: string,
+    options: { page?: number; limit?: number } = {},
+  ): Promise<{
+    message: string;
     products: Product[];
     category?: Category;
     jobQueued: boolean;
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
   }> {
-    const cacheKey = `category_${slug}`;
-    const cached = await this.cacheManager.get<Product[]>(cacheKey);
+    const page = Math.max(1, options.page ?? 1);
+    const limit = Math.min(100, Math.max(1, options.limit ?? 24));
+
+    // The page and size are part of the identity of the result. Caching on the slug alone
+    // would serve page 1's rows for every subsequent page.
+    const cacheKey = `category_${slug}_p${page}_l${limit}`;
+    const cached = await this.cacheManager.get<{
+      products: Product[];
+      category?: Category;
+      total: number;
+    }>(cacheKey);
 
     // Only serve a cache hit that actually has products; an empty array means the previous
     // scrape failed and must not suppress a retry.
-    if (Array.isArray(cached) && cached.length > 0) {
-      this.logger.log(`Returning cached products for category: ${slug}`);
+    if (cached && Array.isArray(cached.products) && cached.products.length > 0) {
+      this.logger.log(`Returning cached products for category: ${slug} (page ${page})`);
       return {
         message: `Returning cached products for ${slug}`,
-        products: cached,
-        jobQueued: false
+        products: cached.products,
+        category: cached.category,
+        jobQueued: false,
+        total: cached.total,
+        page,
+        limit,
+        hasMore: page * limit < cached.total,
       };
     }
 
@@ -178,7 +199,8 @@ export class ScraperService implements OnModuleInit {
     });
 
     if (!category) {
-      throw new Error(`Category not found: ${slug}`);
+      // A missing category is a client error, not a server fault.
+      throw new NotFoundException(`Category not found: ${slug}`);
     }
 
     // Queue another page only while the collection still has one. Fully-scraped categories
@@ -193,14 +215,16 @@ export class ScraperService implements OnModuleInit {
       });
     }
 
-    const products = await this.productRepo.find({
+    const [products, total] = await this.productRepo.findAndCount({
       where: { category: { id: category.id } },
       relations: ['category'],
-      take: 50
+      order: { id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     if (products.length > 0) {
-      await this.cacheManager.set(cacheKey, products, 60 * 60 * 1000);
+      await this.cacheManager.set(cacheKey, { products, category, total }, 60 * 60 * 1000);
     }
 
     return {
@@ -209,7 +233,11 @@ export class ScraperService implements OnModuleInit {
         : `Category ${slug} fully scraped. Returning ${products.length} products.`,
       products,
       category,
-      jobQueued
+      jobQueued,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
     };
   }
 
