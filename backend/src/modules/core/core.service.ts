@@ -77,22 +77,35 @@ export class CoreService {
    * on every visit. Sampling is limited to products that have a cover, because a shelf of
    * placeholder tiles is not worth showing.
    */
-  async getProducts(page = 1, limit = 24, random = false): Promise<PaginatedProducts> {
+  async getProducts(
+    page = 1,
+    limit = 24,
+    random = false,
+    categorySlug?: string,
+  ): Promise<PaginatedProducts> {
     const query = this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category');
 
+    // A slug is not unique across headings, so this matches every copy of the collection.
+    if (categorySlug) {
+      query.andWhere('category.slug = :categorySlug', { categorySlug });
+    }
+
     if (random) {
+      // Counted before the sample is drawn, and off the same filters, so the total
+      // describes the pool the sample came from.
+      const total = await query.getCount();
+
       // `limit`, not `take`: `take` paginates through a DISTINCT subquery, and Postgres
       // rejects an ORDER BY RANDOM() that is not in the select list. The join is
       // many-to-one, so no row multiplication makes DISTINCT necessary here anyway.
       const products = await query
-        .where("product.image_url <> ''")
+        .andWhere("product.image_url <> ''")
         .orderBy('RANDOM()')
         .limit(limit)
         .getMany();
 
-      const total = await this.productRepository.count();
       return { products, total, page: 1, limit, hasMore: total > products.length };
     }
 

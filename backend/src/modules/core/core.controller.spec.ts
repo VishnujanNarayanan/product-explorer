@@ -16,6 +16,9 @@ describe('CoreController', () => {
       getCategoriesByNavigation: jest.fn().mockResolvedValue([]),
       getAllCategories: jest.fn().mockResolvedValue([]),
       getCategoryBySlug: jest.fn().mockResolvedValue(null),
+      getProducts: jest
+        .fn()
+        .mockResolvedValue({ products: [], total: 0, page: 1, limit: 24, hasMore: false }),
       healthCheck: jest.fn().mockResolvedValue({ status: 'OK' }),
     } as never;
 
@@ -146,6 +149,37 @@ describe('CoreController', () => {
       await expect(controller.getCategoryProducts({ slug: 'fantasy' }, {})).rejects.toThrow(
         InternalServerErrorException,
       );
+    });
+  });
+
+  describe('GET /products', () => {
+    it('reads storage without queueing a scrape', async () => {
+      const result = await controller.getProducts({ page: 2, limit: 12 });
+
+      expect(coreService.getProducts).toHaveBeenCalledWith(2, 12, false, undefined);
+      expect(result.total).toBe(0);
+      expect(scraperService.scrapeCategoryBySlug).not.toHaveBeenCalled();
+    });
+
+    it('narrows to one collection when a category is given', async () => {
+      await controller.getProducts({ category: 'fantasy-fiction-books' });
+      expect(coreService.getProducts).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        false,
+        'fantasy-fiction-books',
+      );
+    });
+
+    // The home shelf asks for a sample; the flag has to survive the controller.
+    it('passes the random flag through', async () => {
+      await controller.getProducts({ page: 1, limit: 10, random: true });
+      expect(coreService.getProducts).toHaveBeenCalledWith(1, 10, true, undefined);
+    });
+
+    it('reports a database failure as a 500', async () => {
+      (coreService.getProducts as jest.Mock).mockRejectedValue(new Error('connection lost'));
+      await expect(controller.getProducts({})).rejects.toThrow(InternalServerErrorException);
     });
   });
 
