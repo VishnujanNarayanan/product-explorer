@@ -56,6 +56,13 @@ export const productsAPI = {
   // Get all products. The endpoint is paged, so this returns an envelope, not a bare array.
   getAllProducts: (page?: number, limit?: number) =>
     api.get<ProductsResponse>(`/products${pageQuery(page, limit)}`),
+
+  /**
+   * A random sample of stored products, for the home shelf. Reads storage only — asking
+   * for a fresh shelf never sends anyone to World of Books.
+   */
+  getRandomProducts: (limit = 12) =>
+    api.get<ProductsResponse>(`/products?random=true&limit=${limit}`),
   
   // Get single product by source_id
   getProduct: (sourceId: string, refresh?: boolean) => 
