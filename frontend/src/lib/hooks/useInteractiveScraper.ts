@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useInteractiveScraper.ts (FULL CORRECTED)
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { webSocketClient, WebSocketResponse } from '@/lib/api/websocket';
+import { webSocketClient, WebSocketResponse, ScrapeStep } from '@/lib/api/websocket';
 import { Product } from '@/lib/types';
 import { useToast } from './useToast';
 
@@ -15,6 +15,19 @@ export interface InteractiveScraperState {
   error: string | null;
   hasMore: boolean;
   currentCategory: string | null;
+  /**
+   * What the session is doing right now, in the site's own words. Shown inline rather than
+   * as a toast: a long action goes through several steps and retries, and firing a toast per
+   * step buried the outcome under notifications that each looked like a verdict.
+   */
+  statusMessage: string | null;
+  step: ScrapeStep | null;
+  attempt: number | null;
+  maxAttempts: number | null;
+  /** Where the products on screen came from once an action finished. */
+  source: 'live' | 'stored' | null;
+  /** True when a queued scrape is still expected to add to what is shown. */
+  stillWorking: boolean;
 }
 
 export const useInteractiveScraper = () => {
@@ -30,6 +43,12 @@ export const useInteractiveScraper = () => {
     error: null,
     hasMore: false,
     currentCategory: null,
+    statusMessage: null,
+    step: null,
+    attempt: null,
+    maxAttempts: null,
+    source: null,
+    stillWorking: false,
   });
 
   const productsCache = useRef<Map<string, Product[]>>(new Map());
@@ -44,11 +63,6 @@ export const useInteractiveScraper = () => {
         sessionId: data.payload.sessionId || null,
         status: 'ready',
       }));
-      
-      toast({
-        title: 'Interactive Mode Ready',
-        description: 'Real-time scraper session initialized',
-      });
     },
 
     handleDataChunk: (data: WebSocketResponse) => {
@@ -86,18 +100,30 @@ export const useInteractiveScraper = () => {
     },
 
     handleScrapeStatus: (data: WebSocketResponse) => {
-      const isScraping = data.payload.status === 'scraping';
-      
+      const { status, step, message, attempt, maxAttempts, source, stillWorking } = data.payload;
+      const isScraping = status === 'scraping';
+
       setState(prev => ({
         ...prev,
-        status: isScraping ? 'scraping' : 'ready',
-        isLoading: isScraping,
+        // 'preparing' is groundwork for a click that has not been asked for yet (the menu
+        // pre-warm fired from a category card); it must not put the UI into a loading state
+        // of its own or clear what a finished action reported.
+        status: step === 'preparing' ? prev.status : isScraping ? 'scraping' : 'ready',
+        isLoading: step === 'preparing' ? prev.isLoading : isScraping,
+        statusMessage: message ?? prev.statusMessage,
+        step: step ?? prev.step,
+        attempt: attempt ?? (isScraping ? prev.attempt : null),
+        maxAttempts: maxAttempts ?? (isScraping ? prev.maxAttempts : null),
+        source: source ?? (isScraping ? prev.source : prev.source),
+        stillWorking: stillWorking ?? (isScraping ? prev.stillWorking : false),
       }));
 
-      if (data.payload.message) {
+      // Only the end of an action is worth interrupting the user for, and only when it
+      // changes what they are looking at. Steps and retries show up inline instead.
+      if (step === 'fallback' && message) {
         toast({
-          title: isScraping ? 'Scraping...' : 'Ready',
-          description: data.payload.message,
+          title: 'Still fetching',
+          description: message,
         });
       }
     },
@@ -123,11 +149,6 @@ export const useInteractiveScraper = () => {
         isConnected: true,
         status: 'ready',
       }));
-      
-      toast({
-        title: 'Connected',
-        description: 'WebSocket connected successfully',
-      });
     },
 
     handleDisconnected: () => {
@@ -146,10 +167,7 @@ export const useInteractiveScraper = () => {
     },
 
     handleProgress: (data: WebSocketResponse) => {
-      toast({
-        title: 'Progress Update',
-        description: data.payload.message,
-      });
+      setState(prev => ({ ...prev, statusMessage: data.payload.message ?? prev.statusMessage }));
     },
   }), [toast]);
 
@@ -188,8 +206,10 @@ export const useInteractiveScraper = () => {
   }, [eventHandlers]); // Only depends on eventHandlers which is memoized
 
   // Public methods
+  // Preparation only — opening a section's menu ahead of a click. It deliberately does not
+  // set a loading state: nothing the user asked for is pending, and a pre-warm that never
+  // reports back would otherwise leave the page spinning.
   const hoverNavigation = useCallback((target: string, navigationSlug?: string) => {
-    setState(prev => ({ ...prev, isLoading: true }));
     webSocketClient.hoverNavigation(target, navigationSlug);
   }, []);
 
@@ -203,8 +223,15 @@ export const useInteractiveScraper = () => {
       totalScraped: 0,
       currentChunk: 0,
       isLoading: true,
+      status: 'scraping',
       currentCategory: categorySlug,
       hasMore: false,
+      statusMessage: 'Opening the live browser session…',
+      step: 'preparing',
+      attempt: null,
+      maxAttempts: null,
+      source: null,
+      stillWorking: false,
     }));
     
     webSocketClient.clickCategory(target, categorySlug, navigationSlug);

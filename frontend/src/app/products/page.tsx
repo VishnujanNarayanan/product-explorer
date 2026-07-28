@@ -26,7 +26,11 @@ function ProductsPageContent() {
   // Existing hooks
   const { navigation } = useNavigation()
   const { categories, isLoading: isLoadingCategories } = useCategories(navigationSlug || undefined)
-  const { products, isLoading: isLoadingProducts, loadProducts } = useProducts(categorySlug || undefined, {})
+  const { products, isLoading: isLoadingProducts, loadProducts } = useProducts(
+    categorySlug || undefined,
+    {},
+    navigationSlug || undefined,
+  )
   
   // Interactive scraper hook
   const {
@@ -41,6 +45,12 @@ function ProductsPageContent() {
     hasMore: wsHasMore,
     isLoading: isWsLoading,
     error: _wsError,
+    statusMessage: wsStatusMessage,
+    step: wsStep,
+    attempt: wsAttempt,
+    maxAttempts: wsMaxAttempts,
+    source: wsSource,
+    stillWorking: wsStillWorking,
   } = useInteractiveScraper()
 
   // State
@@ -60,6 +70,9 @@ function ProductsPageContent() {
   // request fires once per category rather than on every status change.
   const liveRequestedRef = useRef<string | null>(null)
   const isWsConnectedRef = useRef(isWsConnected)
+  // Category whose live attempt has already been handed over to background polling, so the
+  // handover happens once per category rather than on every status update.
+  const fallbackPolledRef = useRef<string | null>(null)
 
   // Keep refs updated
   useEffect(() => {
@@ -113,7 +126,7 @@ function ProductsPageContent() {
       pollCount++
       
       try {
-        const response = await navigationAPI.getCategoryProducts(categorySlug)
+        const response = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug || undefined)
         
         const hasNewProducts = response.products && response.products.length > lastProductCountRef.current
         
@@ -152,7 +165,7 @@ function ProductsPageContent() {
         }
       }
     }, 5000)
-  }, [categorySlug, toast, stopPolling, products.length])
+  }, [categorySlug, navigationSlug, toast, stopPolling, products.length])
 
   // Keep startPolling ref updated
   useEffect(() => {
@@ -173,7 +186,7 @@ function ProductsPageContent() {
       try {
         // Paint whatever is already stored so the grid is not blank while the live
         // browser session works through hover -> click -> scrape.
-        const result = await navigationAPI.getCategoryProducts(categorySlug)
+        const result = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug || undefined)
         lastProductCountRef.current = result.products?.length || 0
         await loadProductsRef.current()
 
@@ -204,7 +217,7 @@ function ProductsPageContent() {
       stopPolling()
       isInitializingRef.current = false
     }
-  }, [categorySlug, stopPolling])
+  }, [categorySlug, navigationSlug, stopPolling])
 
   // Drive the real browser session: clicking a category here clicks it on World of Books.
   // Runs when the category changes and also when the socket becomes ready afterwards, so
@@ -215,8 +228,24 @@ function ProductsPageContent() {
     if (liveRequestedRef.current === categorySlug) return
 
     liveRequestedRef.current = categorySlug
+    fallbackPolledRef.current = null
     clickCategory(currentCategory?.title || categorySlug, categorySlug, navigationSlug || undefined)
   }, [categorySlug, navigationSlug, isWsConnected, scraperStatus, currentCategory, clickCategory])
+
+  // When the live attempt ends on stored data, the queued listing scrape is still running —
+  // it is what made "wait a while, or hit Refresh" work. Poll for it instead of leaving the
+  // grid frozen on a message the user has to act on themselves.
+  useEffect(() => {
+    if (!categorySlug || wsSource !== 'stored' || !wsStillWorking) return
+    // The outcome has to belong to the category on screen: switching categories leaves the
+    // previous result in state for a moment, and polling on that would report the wrong
+    // category as still fetching.
+    if (wsCategory !== categorySlug) return
+    if (fallbackPolledRef.current === categorySlug) return
+
+    fallbackPolledRef.current = categorySlug
+    startPollingRef.current?.()
+  }, [categorySlug, wsCategory, wsSource, wsStillWorking])
 
   // Handle category change. Every click is a request for fresh data — including clicking
   // the category already open, which is how you ask for a re-scrape.
@@ -226,6 +255,7 @@ function ProductsPageContent() {
     if (categorySlug) resetProducts(categorySlug)
     resetProducts(slug)
     liveRequestedRef.current = null
+    fallbackPolledRef.current = null
 
     if (!isWsConnected) {
       toast({
@@ -275,7 +305,7 @@ function ProductsPageContent() {
         })
       } else {
         // Fallback to REST API
-        await navigationAPI.getCategoryProducts(categorySlug)
+        await navigationAPI.getCategoryProducts(categorySlug, navigationSlug || undefined)
         await loadProducts()
         
         toast({
@@ -320,11 +350,32 @@ function ProductsPageContent() {
     )
   }
 
-  // Determine loading state
-  const isLoading = isLoadingProducts || isWsLoading || isPolling || (isWsConnected && scraperStatus === 'scraping')
-  const showProducts = hasInitiallyLoaded && !isLoading && displayProducts.length > 0
-  const showEmptyState = hasInitiallyLoaded && !isLoading && displayProducts.length === 0
-  const showLoadingState = !hasInitiallyLoaded || isLoading
+  // Anything in flight: a live click, a REST load, or the background poll that follows a
+  // fallback.
+  const isWorking =
+    isLoadingProducts || isWsLoading || isPolling || (isWsConnected && scraperStatus === 'scraping')
+  const hasSomethingToShow = displayProducts.length > 0
+
+  // Take over the screen only when there is nothing to look at yet. Once products are on
+  // screen, further work is reported in a banner above them — replacing a populated grid
+  // with a spinner is what made a working background scrape look like a stalled one.
+  const showLoadingState = (!hasInitiallyLoaded || isWorking) && !hasSomethingToShow
+  const isWorkingInBackground = isWorking && hasSomethingToShow
+  const showProducts = hasSomethingToShow
+  const showEmptyState = hasInitiallyLoaded && !isWorking && !hasSomethingToShow
+  const isLoading = showLoadingState
+
+  // What the system is doing, in one line. Falls back to a plain description when the live
+  // session has not said anything yet.
+  const progressLine =
+    wsStatusMessage ||
+    (isPolling
+      ? 'Fetching from the background scrape…'
+      : `Loading products from ${currentCategory?.title || 'this category'}…`)
+  const retryLine =
+    wsStep === 'retrying' && wsAttempt && wsMaxAttempts
+      ? `Attempt ${wsAttempt} of ${wsMaxAttempts}`
+      : null
 
   return (
     <div className="space-y-8">
@@ -406,7 +457,12 @@ function ProductsPageContent() {
                     categoryTitle={currentCategory?.title || categorySlug}
                     navigationSlug={navigationSlug || undefined}
                     onScrapeComplete={(newProducts) => {
-                      setDisplayProducts(prev => [...prev, ...newProducts])
+                      // Merge on source_id: the REST fallback returns the whole stored page,
+                      // which overlaps what is already on screen.
+                      setDisplayProducts(prev => {
+                        const seen = new Set(prev.map((p: any) => p.source_id))
+                        return [...prev, ...newProducts.filter((p: any) => !seen.has(p.source_id))]
+                      })
                     }}
                     disabled={isRefreshing || isLoading}
                   />
@@ -447,15 +503,15 @@ function ProductsPageContent() {
                 }
               </p>
               <p className="text-muted-foreground mt-2 text-center max-w-md">
-                {isWsConnected
-                  ? `Mirroring ${currentCategory?.title} on World of Books...`
-                  : `Loading products from ${currentCategory?.title}`
-                }
+                {progressLine}
               </p>
+              {retryLine && (
+                <p className="mt-2 text-sm font-medium text-primary">{retryLine}</p>
+              )}
               {(isPolling || (isWsConnected && scraperStatus === 'scraping')) && (
-                <div className="mt-6 text-sm text-muted-foreground">
-                  <p>This may take a minute...</p>
-                  {isWsConnected && (
+                <div className="mt-6 text-sm text-muted-foreground text-center">
+                  <p>This may take a minute — nothing has failed, it is still running.</p>
+                  {isWsConnected && totalScraped > 0 && (
                     <p className="mt-1">Scraped {totalScraped} products so far</p>
                   )}
                 </div>
@@ -468,15 +524,35 @@ function ProductsPageContent() {
             <div className="rounded-xl border border-dashed bg-card/30 p-16 text-center">
               <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <p className="text-lg font-medium text-foreground mb-2">
-                No products found
+                No products found yet
               </p>
               <p className="text-muted-foreground mb-6">
-                Try refreshing to fetch the latest products
+                The scrape finished without returning anything for this category. Refreshing
+                asks World of Books again.
               </p>
               <Button onClick={handleRefresh} size="lg" variant="outline">
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Refresh Products
               </Button>
+            </div>
+          )}
+
+          {/* Still working, with products already on screen. Says plainly that more is
+              coming, so a fallback to stored data does not read as a dead end. */}
+          {isWorkingInBackground && (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <Loader2 className="mt-0.5 h-5 w-5 flex-shrink-0 animate-spin text-primary" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {wsSource === 'stored'
+                    ? 'Showing stored products while the scrape continues'
+                    : 'Still fetching more products'}
+                </p>
+                <p className="text-sm text-muted-foreground">{progressLine}</p>
+                {retryLine && (
+                  <p className="mt-1 text-xs font-medium text-primary">{retryLine}</p>
+                )}
+              </div>
             </div>
           )}
 

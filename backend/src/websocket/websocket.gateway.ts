@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { ScraperSessionService } from '../modules/scraper/scraper-session.service';
+import { ScraperSessionService, ScrapeProgress } from '../modules/scraper/scraper-session.service';
 
 interface WebSocketEvent {
   type: 'NAVIGATE' | 'HOVER' | 'CLICK' | 'LOAD_MORE' | 'GET_DETAILS';
@@ -92,6 +92,10 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         // Braced so the per-branch `const` is scoped to its own case rather than the whole
         // switch, where it would sit in the temporal dead zone for the other branches.
         case 'hover': {
+          // Preparation, not the user's request. It is reported as a 'preparing' step so the
+          // client can show it as groundwork instead of announcing an outcome — a missed
+          // pre-warm used to surface as "Could not hover over ...", which read as a failed
+          // scrape even though the click that follows opens the menu itself.
           const hoverResult = await this.scraperSessionService.handleHover(
             sessionId,
             target,
@@ -100,7 +104,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           client.emit('SCRAPE_STATUS', {
             type: 'SCRAPE_STATUS',
             payload: {
-              status: hoverResult.status === 'success' ? 'active' : 'idle',
+              status: 'active',
+              step: 'preparing',
               message: hoverResult.message,
             },
           });
@@ -116,15 +121,30 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             type: 'SCRAPE_STATUS',
             payload: {
               status: 'scraping',
+              step: 'preparing',
               message: `Scraping ${categorySlug}...`,
             },
           });
-          
+
+          // Each step of a click — opening the menu, a retry, falling back — is pushed as it
+          // happens. The action can take tens of seconds across retries, and without this the
+          // client had nothing to show between "Scraping..." and the final answer.
           const clickResult = await this.scraperSessionService.handleClick(
             sessionId,
             target,
             categorySlug,
             navigationSlug,
+            (progress: ScrapeProgress) =>
+              client.emit('SCRAPE_STATUS', {
+                type: 'SCRAPE_STATUS',
+                payload: {
+                  status: 'scraping',
+                  step: progress.step,
+                  message: progress.message,
+                  attempt: progress.attempt,
+                  maxAttempts: progress.maxAttempts,
+                },
+              }),
           );
           
           // Send products in chunks if available
@@ -143,8 +163,14 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           client.emit('SCRAPE_STATUS', {
             type: 'SCRAPE_STATUS',
             payload: {
-              status: clickResult.status === 'success' ? 'ready' : 'idle',
+              // Always 'ready': the action is over either way. Whether the data came from the
+              // live page or from storage is carried by `source`, and `stillWorking` says the
+              // queued scrape is expected to add more — a fallback is not a failure.
+              status: 'ready',
+              step: clickResult.source === 'stored' ? 'fallback' : 'done',
               message: clickResult.message,
+              source: clickResult.source,
+              stillWorking: clickResult.stillWorking ?? false,
             },
           });
           break;
@@ -167,6 +193,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             sessionId,
             target,
             categorySlug,
+            navigationSlug,
           );
           
           if (loadMoreResult.products && loadMoreResult.products.length > 0) {

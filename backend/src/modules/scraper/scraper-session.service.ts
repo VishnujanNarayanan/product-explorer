@@ -11,6 +11,7 @@ import { Product } from '../../entities/product.entity';
 import { Category } from '../../entities/category.entity';
 import { Navigation } from '../../entities/navigation.entity';
 import { InteractiveScraper } from './scrapers/interactive.scraper';
+import { findCategory } from '../../common/category-lookup';
 
 export interface ScrapingResult {
   products: any[];
@@ -18,7 +19,30 @@ export interface ScrapingResult {
   message: string;
   totalScraped: number;
   hasMore: boolean;
+  /**
+   * How the result was produced, so the client can distinguish "this is live" from "this is
+   * what we had stored while the background scrape catches up". Without it a fallback looked
+   * identical to a hard failure and the UI reported one.
+   */
+  source?: 'live' | 'stored';
+  /** True when stored data is on screen but work is still expected to fill it in. */
+  stillWorking?: boolean;
 }
+
+/**
+ * Step-by-step notes from a long action, so the client can show what is being attempted
+ * rather than a spinner that looks stuck. `attempt`/`maxAttempts` are set while retrying.
+ */
+export interface ScrapeProgress {
+  step: 'preparing' | 'opening-menu' | 'scraping' | 'retrying' | 'fallback';
+  message: string;
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+export type ProgressReporter = (progress: ScrapeProgress) => void;
+
+const NO_PROGRESS: ProgressReporter = () => undefined;
 
 interface ActiveSession {
   browser: playwright.Browser;
@@ -27,6 +51,8 @@ interface ActiveSession {
   lastActivity: Date;
   currentUrl: string;
   categorySlug?: string;
+  /** Heading the current category was reached through — a slug alone is ambiguous. */
+  navigationSlug?: string;
   productsScraped: number;
   /** Last page of the collection feed served to this client, for "load more". */
   lastPage: number;
@@ -127,54 +153,78 @@ export class ScraperSessionService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Opens a section's menu ahead of a click. This is preparation, not the user's request:
+   * the click path opens the menu again with its own retries, so a miss here changes
+   * nothing about the outcome and must not be reported as a failure.
+   */
   async handleHover(sessionId: string, target: string, navigationSlug?: string): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
-    
+
     const session = await this.ensureSession(sessionId);
-    
+
     try {
       const hovered = await this.interactiveScraper.hoverNavigation(
         session.page,
         target,
         navigationSlug
       );
-      
+
       return {
         products: [],
-        status: hovered ? 'success' : 'partial',
-        message: hovered ? `Hovered over ${target}` : `Could not hover over ${target}`,
+        status: 'success',
+        message: hovered
+          ? `Opened the ${target} menu`
+          : `Preparing the ${target} menu — it will be opened when you pick a category`,
         totalScraped: 0,
         hasMore: false,
       };
-      
+
     } catch (error) {
-      this.logger.error(`Hover failed for ${sessionId}:`, error);
+      // Still not a user-facing failure: the click path will try again from scratch.
+      this.logger.warn(`Menu pre-warm failed for ${sessionId}: ${error.message}`);
       return {
         products: [],
-        status: 'failed',
-        message: `Hover failed: ${error.message}`,
+        status: 'success',
+        message: `Preparing the ${target} menu`,
         totalScraped: 0,
         hasMore: false,
       };
     }
   }
 
-  async handleClick(sessionId: string, target: string, categorySlug: string, navigationSlug?: string): Promise<ScrapingResult> {
+  async handleClick(
+    sessionId: string,
+    target: string,
+    categorySlug: string,
+    navigationSlug?: string,
+    onProgress: ProgressReporter = NO_PROGRESS,
+  ): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
-    
+
+    onProgress({ step: 'preparing', message: 'Starting the live browser session…' });
     const session = await this.ensureSession(sessionId);
-    
+
     try {
       // A click is an explicit request for live data: mirror it on the real site and only
       // fall back to what is stored once the live attempts are exhausted.
-      const clicked = await this.clickWithRetries(session, categorySlug, navigationSlug || target);
+      const clicked = await this.clickWithRetries(
+        session,
+        categorySlug,
+        navigationSlug || target,
+        onProgress,
+      );
 
       if (!clicked) {
         return this.cachedFallback(
           categorySlug,
-          `Could not click "${categorySlug}" in the menu after ${this.CLICK_ATTEMPTS} attempts`,
+          `The menu did not open after ${this.CLICK_ATTEMPTS} attempts`,
+          navigationSlug,
+          onProgress,
         );
       }
+
+      onProgress({ step: 'scraping', message: `Reading the ${categorySlug} listing…` });
 
       // Scrape first batch
       const products = await this.interactiveScraper.scrapeProductsFromPage(
@@ -186,15 +236,23 @@ export class ScraperSessionService implements OnModuleDestroy {
 
       // Update session state
       session.categorySlug = categorySlug;
+      // Which heading the category was reached through, so a later "load more" files its
+      // products under the same row rather than the other heading's copy.
+      session.navigationSlug = navigationSlug;
       session.productsScraped = products.length;
       session.lastPage = 1;
       session.currentUrl = session.page.url();
 
       if (products.length === 0) {
-        return this.cachedFallback(categorySlug, `No products found live on ${categorySlug}`);
+        return this.cachedFallback(
+          categorySlug,
+          `The live page returned no products for ${categorySlug}`,
+          navigationSlug,
+          onProgress,
+        );
       }
 
-      await this.saveProductsToCache(categorySlug, products);
+      await this.saveProductsToCache(categorySlug, products, navigationSlug);
 
       // Queue background refresh for other categories
       await this.queueBackgroundRefresh(categorySlug);
@@ -207,15 +265,26 @@ export class ScraperSessionService implements OnModuleDestroy {
         message: `Scraped ${products.length} products live from ${categorySlug}`,
         totalScraped: products.length,
         hasMore,
+        source: 'live',
       };
 
     } catch (error) {
       this.logger.error(`Click failed for ${sessionId}:`, error);
-      return this.cachedFallback(categorySlug, `Live scrape failed: ${error.message}`);
+      return this.cachedFallback(
+        categorySlug,
+        `The live session stopped: ${error.message}`,
+        navigationSlug,
+        onProgress,
+      );
     }
   }
 
-  async handleLoadMore(sessionId: string, target: string, categorySlug: string): Promise<ScrapingResult> {
+  async handleLoadMore(
+    sessionId: string,
+    target: string,
+    categorySlug: string,
+    navigationSlug?: string,
+  ): Promise<ScrapingResult> {
     this.updateActivity(sessionId);
     
     const session = await this.ensureSession(sessionId);
@@ -227,6 +296,8 @@ export class ScraperSessionService implements OnModuleDestroy {
         session.lastPage = 1;
         session.productsScraped = 0;
       }
+      // The caller's heading wins when it sends one; otherwise keep the one the click set.
+      if (navigationSlug) session.navigationSlug = navigationSlug;
 
       const nextPage = (session.lastPage || 1) + 1;
 
@@ -251,7 +322,7 @@ export class ScraperSessionService implements OnModuleDestroy {
       session.lastPage = nextPage;
       session.productsScraped += newProducts.length;
 
-      await this.saveProductsToCache(categorySlug, newProducts);
+      await this.saveProductsToCache(categorySlug, newProducts, session.navigationSlug);
 
       // Check if still more available
       const hasMore = await this.interactiveScraper.hasMorePages(
@@ -336,8 +407,21 @@ export class ScraperSessionService implements OnModuleDestroy {
     session: ActiveSession,
     categorySlug: string,
     navigationSlug?: string,
+    onProgress: ProgressReporter = NO_PROGRESS,
   ): Promise<boolean> {
     for (let attempt = 1; attempt <= this.CLICK_ATTEMPTS; attempt++) {
+      // Each attempt is announced, so a retry reads as the system still working rather
+      // than as a spinner that has stopped moving.
+      onProgress({
+        step: attempt === 1 ? 'opening-menu' : 'retrying',
+        message:
+          attempt === 1
+            ? `Opening the menu and picking ${categorySlug}…`
+            : `The menu was not ready — trying again (attempt ${attempt} of ${this.CLICK_ATTEMPTS})…`,
+        attempt,
+        maxAttempts: this.CLICK_ATTEMPTS,
+      });
+
       try {
         // Always start from the homepage: after a previous click the browser sits on a
         // collection page, where the menu markup may differ or be stale.
@@ -367,19 +451,34 @@ export class ScraperSessionService implements OnModuleDestroy {
    * Last resort when a live pass yields nothing: serve what was stored previously so the
    * grid is not empty, while saying plainly that the data is not fresh.
    */
-  private async cachedFallback(categorySlug: string, reason: string): Promise<ScrapingResult> {
-    const cachedProducts = await this.getCachedProducts(categorySlug, 120);
+  private async cachedFallback(
+    categorySlug: string,
+    reason: string,
+    navigationSlug?: string,
+    onProgress: ProgressReporter = NO_PROGRESS,
+  ): Promise<ScrapingResult> {
+    const cachedProducts = await this.getCachedProducts(categorySlug, 120, navigationSlug);
 
     this.logger.warn(`${reason} — falling back to ${cachedProducts.length} stored products`);
 
+    // The queued listing scrape keeps filling this category regardless of what the live
+    // browser managed, so say so: the previous wording read as "it failed" when the answer
+    // was really "not live, still coming".
+    onProgress({
+      step: 'fallback',
+      message: `${reason}. The background scrape is still running — results will appear here.`,
+    });
+
     return {
       products: cachedProducts,
-      status: cachedProducts.length > 0 ? 'partial' : 'failed',
+      status: 'partial',
       message: cachedProducts.length > 0
-        ? `${reason}. Showing ${cachedProducts.length} previously scraped products`
-        : reason,
+        ? `Showing ${cachedProducts.length} stored products while the background scrape continues`
+        : 'No products stored yet — the background scrape is still running',
       totalScraped: cachedProducts.length,
       hasMore: false,
+      source: 'stored',
+      stillWorking: true,
     };
   }
 
@@ -391,11 +490,13 @@ export class ScraperSessionService implements OnModuleDestroy {
     return session;
   }
 
-  private async getCachedProducts(categorySlug: string, limit: number): Promise<any[]> {
-    const category = await this.categoryRepo.findOne({
-      where: { slug: categorySlug },
-    });
-    
+  private async getCachedProducts(
+    categorySlug: string,
+    limit: number,
+    navigationSlug?: string,
+  ): Promise<any[]> {
+    const category = await findCategory(this.categoryRepo, categorySlug, navigationSlug);
+
     if (!category) {
       return [];
     }
@@ -410,19 +511,23 @@ export class ScraperSessionService implements OnModuleDestroy {
     return products;
   }
 
-  private async saveProductsToCache(categorySlug: string, products: any[]): Promise<void> {
-    const category = await this.categoryRepo.findOne({
-      where: { slug: categorySlug },
-    });
-    
+  private async saveProductsToCache(
+    categorySlug: string,
+    products: any[],
+    navigationSlug?: string,
+  ): Promise<void> {
+    const category = await findCategory(this.categoryRepo, categorySlug, navigationSlug);
+
     if (!category) {
       this.logger.warn(`Category ${categorySlug} not found for caching`);
       return;
     }
-    
+
     for (const productData of products) {
+      // Scoped to this category: source_id is unique per category, not globally, so the
+      // same collection reached through another heading keeps its own rows.
       const existing = await this.productRepo.findOne({
-        where: { source_id: productData.source_id },
+        where: { source_id: productData.source_id, category: { id: category.id } },
       });
       
       if (existing) {

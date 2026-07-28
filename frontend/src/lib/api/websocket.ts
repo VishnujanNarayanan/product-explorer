@@ -12,11 +12,32 @@ export interface WebSocketEvent {
   };
 }
 
+/**
+ * Which part of a live action a status message describes. `preparing` and `retrying` are
+ * groundwork the user should see as progress, not as an outcome; `fallback` means stored
+ * data is on screen while a queued scrape keeps going.
+ */
+export type ScrapeStep =
+  | 'preparing'
+  | 'opening-menu'
+  | 'scraping'
+  | 'retrying'
+  | 'fallback'
+  | 'done';
+
 export interface WebSocketResponse {
   type: 'DATA_CHUNK' | 'SCRAPE_STATUS' | 'SESSION_READY' | 'ERROR' | 'PROGRESS';
   payload: {
     products?: Product[];
     status?: 'active' | 'idle' | 'scraping' | 'ready';
+    step?: ScrapeStep;
+    /** Set while the menu is being retried, e.g. attempt 2 of 3. */
+    attempt?: number;
+    maxAttempts?: number;
+    /** Whether the products came off the live page or out of storage. */
+    source?: 'live' | 'stored';
+    /** True when a background scrape is still expected to add to what is shown. */
+    stillWorking?: boolean;
     message?: string;
     totalScraped?: number;
     chunkIndex?: number;
