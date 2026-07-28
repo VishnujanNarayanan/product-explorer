@@ -82,7 +82,7 @@ export default function Home() {
               )}
               <Button variant="outline" size="lg" onClick={reshuffle} disabled={isLoadingProducts}>
                 <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
-                Shuffle the shelf
+                Show me some books
               </Button>
             </div>
           </div>
@@ -99,12 +99,15 @@ export default function Home() {
       <section className="container py-14">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
           <div>
-            <p className="label-meta">From the stockroom</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold">A random shelf</h2>
+            <p className="label-meta">From the catalogue</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold">Have a look at some books</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A different selection each time you arrive.
+            </p>
           </div>
           <Button variant="outline" onClick={reshuffle} disabled={isLoadingProducts}>
             <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
-            Shuffle
+            Show me others
           </Button>
         </div>
 
@@ -126,7 +129,7 @@ export default function Home() {
 
         {!isLoadingProducts && products.length === 0 && (
           <div className="mt-8 rounded-lg border border-dashed p-12 text-center">
-            <p className="font-medium">No books stored yet</p>
+            <p className="font-medium">Nothing in the catalogue yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Open a category from the bar above — the first visit scrapes it.
             </p>
