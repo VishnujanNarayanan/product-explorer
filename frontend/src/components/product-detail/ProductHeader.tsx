@@ -1,5 +1,5 @@
 import Image from "next/image"
-import { Star, Calendar, Tag, RefreshCw } from "lucide-react"
+import { Star, Calendar, Tag, RefreshCw, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Product } from "@/lib/types"
 import { formatPrice, getRatingStars, formatDate } from "@/lib/utils"
@@ -43,35 +43,27 @@ export function ProductHeader({
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>Home</span>
-        <span>/</span>
-        {product.category && (
-          <>
-            <span>{product.category.title}</span>
-            <span>/</span>
-          </>
-        )}
-        <span className="font-medium text-foreground">{product.title}</span>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Product Image */}
-        <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        {/*
+          Product image. No fixed aspect ratio: a cover is whatever shape the publisher
+          printed, and forcing a square meant object-cover cropped the author's name off
+          the bottom of every tall paperback. width/height of 0 with `sizes` is the Next.js
+          way of saying "I do not know the dimensions" — the browser applies the file's own
+          ratio once it loads, so each book keeps its true shape.
+        */}
+        <div className="relative mx-auto w-full max-w-sm self-start rounded-lg border bg-white p-6 lg:mx-0">
           {product.image_url ? (
             <Image
               src={product.image_url}
               alt={product.title}
-              fill
-              className="object-cover"
+              width={0}
+              height={0}
+              sizes="(max-width: 1024px) 90vw, 40vw"
+              className="h-auto w-full"
               priority
-              sizes="(max-width: 768px) 100vw, 50vw"
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-6xl">
-              📚
-            </div>
+            <div className="flex aspect-[3/4] items-center justify-center text-6xl">📚</div>
           )}
           {onRefresh && (
             <div className="absolute right-2 top-2">
@@ -80,6 +72,7 @@ export function ProductHeader({
                 size="icon"
                 onClick={onRefresh}
                 disabled={isRefreshing}
+                aria-label="Refresh this book's data"
                 className="h-9 w-9 bg-background/80 backdrop-blur-sm"
               >
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -102,7 +95,9 @@ export function ProductHeader({
             )}
           </div>
 
-          {/* Rating */}
+          {/* Rating — only when there is one. World of Books publishes none, so this is
+              normally absent rather than a row of empty stars reading "0.0 (0 reviews)". */}
+          {rating > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex">
               {Array(full).fill(0).map((_, i) => (
@@ -120,6 +115,7 @@ export function ProductHeader({
               ({reviewsCount} review{reviewsCount !== 1 ? 's' : ''})
             </span>
           </div>
+          )}
 
           {/* Price */}
           <div className="space-y-2">
@@ -134,9 +130,16 @@ export function ProductHeader({
 
           {/* Actions */}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button size="lg" className="flex-1">
-              Add to Cart
-            </Button>
+            {/* Nothing here is for sale — buying happens on World of Books, so the primary
+                action goes there rather than to a cart that never existed. */}
+            {product.source_url && (
+              <Button size="lg" className="flex-1 gap-2" asChild>
+                <a href={product.source_url} target="_blank" rel="noopener noreferrer">
+                  View on World of Books
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
             <Button 
               size="lg" 
               variant="outline" 
@@ -158,20 +161,6 @@ export function ProductHeader({
               </Button>
             )}
           </div>
-
-          {/* Source Link */}
-          {product.source_url && (
-            <div className="pt-4 border-t">
-              <a
-                href={product.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary hover:underline"
-              >
-                View on World of Books →
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </div>

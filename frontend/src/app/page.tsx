@@ -1,166 +1,262 @@
-﻿"use client"
+"use client"
 
-import { useState, useEffect } from 'react'
-import { NavigationGrid } from '@/components/navigation/NavigationGrid'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { ArrowRight, Loader2, RefreshCw, Shuffle } from 'lucide-react'
+import { ProductCard } from '@/components/product/ProductCard'
 import { useNavigation } from '@/lib/hooks/useNavigation'
+import { useRandomProducts } from '@/lib/hooks/useRandomProducts'
 import { Button } from '@/components/ui/Button'
-import { RefreshCw, Loader2 } from 'lucide-react'
 import { useToast } from '@/lib/hooks/useToast'
 
-
-
 export default function Home() {
-  const { navigation, isLoading, error, refreshNavigation } = useNavigation()
+  const { navigation, isLoading: isLoadingNavigation, error, refreshNavigation } = useNavigation()
+  const { products, isLoading: isLoadingProducts, reshuffle } = useRandomProducts(10)
   const { toast } = useToast()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [hasAttemptedRefresh, setHasAttemptedRefresh] = useState(false)
-  useEffect(() => {
-  // Initialize WebSocket connection on homepage load
-    const initWebSocket = () => {
-      if (typeof window !== 'undefined') {
-        // The WebSocket client auto-connects on import
-        console.log('WebSocket client initialized')
-      }
-    }
-    
-    initWebSocket()
-  }, [])
-  useEffect(() => {
-    // Auto-scrape navigation when page loads if empty (only once)
-    if (!isLoading && !isRefreshing && navigation.length === 0 && !hasAttemptedRefresh) {
-      setHasAttemptedRefresh(true)
-      handleRefreshAll()
-    }
-  }, [isLoading, isRefreshing])
 
-  const handleRefreshAll = async () => {
+  useEffect(() => {
+    // A first-run install has no navigation stored. Fetch it once rather than leaving
+    // someone on an empty page wondering what to press.
+    if (!isLoadingNavigation && !isRefreshing && navigation.length === 0 && !hasAttemptedRefresh) {
+      setHasAttemptedRefresh(true)
+      handleRefreshNavigation()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingNavigation, isRefreshing, navigation.length, hasAttemptedRefresh])
+
+  const handleRefreshNavigation = async () => {
     setIsRefreshing(true)
     try {
       const result = await refreshNavigation()
-      // Check if we got data back
       if (result?.data && result.data.length > 0) {
         toast({
-          title: "Navigation Updated",
-          description: `Loaded ${result.data.length} navigation items`
+          title: "Sections updated",
+          description: `${result.data.length} sections loaded from World of Books`,
         })
       } else {
         toast({
-          title: "Refresh Queued",
-          description: "Scraping started in background. Refreshing page...",
+          title: "Scrape queued",
+          description: "The sections will appear once the scrape finishes.",
         })
-        // Wait a moment then revalidate
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
       }
     } catch {
       toast({
-        title: "Error",
-        description: "Failed to refresh navigation",
-        variant: "destructive"
+        title: "Could not reach World of Books",
+        description: "The sections could not be refreshed. Try again in a moment.",
+        variant: "destructive",
       })
     } finally {
       setIsRefreshing(false)
     }
   }
 
+  // The hero shelf and the grid draw from the same sample; the shelf takes the first few
+  // covers so nothing is fetched twice.
+  const shelf = products.slice(0, 5)
+
   return (
-    <div className="space-y-12">
-      {/* Hero Section */}
-      <section className="text-center space-y-6">
-        <div>
-          <h1 className="text-5xl font-bold tracking-tight lg:text-6xl">
-            World of Books Explorer
-          </h1>
-          <p className="mt-4 text-xl text-muted-foreground max-w-2xl mx-auto">
-            Discover and explore thousands of books across multiple categories with real-time data
-          </p>
-        </div>
-        <div className="flex justify-center gap-4 pt-4">
-          <Button 
-            onClick={handleRefreshAll} 
-            disabled={isRefreshing || isLoading}
-            size="lg"
-          >
-            {isRefreshing || isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading Navigation...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Navigation
-              </>
-            )}
-          </Button>
+    <div>
+      {/* Hero: the catalogue itself, standing on a shelf. */}
+      <section className="border-b bg-card">
+        <div className="container grid items-end gap-12 py-16 lg:grid-cols-12 lg:py-20">
+          <div className="lg:col-span-5">
+            <p className="label-meta">Second-hand books · scraped live</p>
+            <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+              Every shelf at World of Books, one click deep.
+            </h1>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground">
+              Pick a section from the bar above and we open it in a real browser session —
+              the books arrive as the page is walked, then stay stored for the next visit.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              {navigation[1] && (
+                <Button asChild size="lg">
+                  <Link href={`/categories?navigation=${navigation[1].slug}`}>
+                    Browse {navigation[1].title}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" size="lg" onClick={reshuffle} disabled={isLoadingProducts}>
+                <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
+                Show me some books
+              </Button>
+            </div>
+          </div>
+
+          {/* min-w-0: without it the shelf's own min-content width pushes the grid track
+              wider than the viewport, and the whole page scrolls sideways on a phone. */}
+          <div className="min-w-0 lg:col-span-7">
+            <Shelf products={shelf} isLoading={isLoadingProducts} />
+          </div>
         </div>
       </section>
 
-      {/* Loading State */}
-      {(isLoading || isRefreshing) && navigation.length === 0 && (
-        <section className="text-center py-12">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-lg text-muted-foreground">
-            Loading navigation items from World of Books...
-          </p>
-        </section>
-      )}
-
-      {/* Error State */}
-      {error && navigation.length === 0 && (
-        <section className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
-          <p className="text-destructive mb-4">Failed to load navigation items</p>
-          <Button onClick={handleRefreshAll} variant="outline">
-            Try Again
+      {/* A random draw from storage — a different shelf on every arrival. */}
+      <section className="container py-14">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="label-meta">From the catalogue</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold">Have a look at some books</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A different selection each time you arrive.
+            </p>
+          </div>
+          <Button variant="outline" onClick={reshuffle} disabled={isLoadingProducts}>
+            <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
+            Show me others
           </Button>
-        </section>
-      )}
+        </div>
 
-      {/* Navigation Section */}
-      {!isLoading && navigation.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-8">
+        <div className="mt-8 grid gap-5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          {isLoadingProducts && products.length === 0
+            ? Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="overflow-hidden rounded-lg border">
+                  <div className="skeleton aspect-[3/4] rounded-none" />
+                  <div className="space-y-2 border-t p-4">
+                    <div className="skeleton h-4" />
+                    <div className="skeleton h-3 w-2/3" />
+                  </div>
+                </div>
+              ))
+            : products.map((product) => (
+                <ProductCard key={`${product.category?.id}-${product.id}`} product={product} />
+              ))}
+        </div>
+
+        {!isLoadingProducts && products.length === 0 && (
+          <div className="mt-8 rounded-lg border border-dashed p-12 text-center">
+            <p className="font-medium">Nothing in the catalogue yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open a category from the bar above — the first visit scrapes it.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Sections, with their categories visible rather than a click away. */}
+      <section className="border-t bg-card">
+        <div className="container py-14">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
             <div>
-              <h2 className="text-4xl font-bold">Browse Categories</h2>
-              <p className="mt-2 text-muted-foreground">
-                Click on any category to explore its subcategories
+              <p className="label-meta">The whole catalogue</p>
+              <h2 className="mt-2 font-display text-3xl font-semibold">Browse by section</h2>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={handleRefreshNavigation}
+              disabled={isRefreshing || isLoadingNavigation}
+            >
+              {isRefreshing || isLoadingNavigation ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Re-scrape sections
+            </Button>
+          </div>
+
+          {error && navigation.length === 0 ? (
+            <div className="mt-8 rounded-lg border border-destructive/30 bg-destructive/5 p-8 text-center">
+              <p className="font-medium text-destructive">
+                World of Books could not be reached
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The sections are scraped on demand. Try again once you are back online.
               </p>
             </div>
-            <span className="text-2xl font-bold text-primary">
-              {navigation.length} Sections
-            </span>
-          </div>
-          <NavigationGrid navigation={navigation} isLoading={false} />
-        </section>
-      )}
+          ) : (
+            <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {navigation.map((section) => {
+                const categories = section.categories ?? []
+                return (
+                  <div key={section.id} className="rounded-lg border bg-background p-6">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <h3 className="font-display text-xl font-semibold">{section.title}</h3>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {categories.length}
+                      </span>
+                    </div>
+                    <ul className="mt-4 space-y-1">
+                      {categories.slice(0, 5).map((category) => (
+                        <li key={category.id}>
+                          <Link
+                            href={`/products?category=${category.slug}&navigation=${section.slug}`}
+                            className="flex items-baseline justify-between gap-3 border-l-2 border-transparent py-1 pl-3 text-sm text-muted-foreground transition-colors hover:border-highlight hover:text-foreground"
+                          >
+                            <span className="truncate">{category.title}</span>
+                            {category.product_count > 0 && (
+                              <span className="font-mono text-[0.6875rem] text-highlight">
+                                {category.product_count}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href={`/categories?navigation=${section.slug}`}
+                      className="group mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                    >
+                      All {categories.length} categories
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
 
-      {/* Stats Section */}
-      {!isLoading && navigation.length > 0 && (
-        <section>
-          <h2 className="text-3xl font-bold mb-6">Quick Stats</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-lg border bg-card p-6 text-center hover:border-primary/30 transition-colors">
-              <div className="text-4xl font-bold text-primary">{navigation.length}</div>
-              <div className="text-sm text-muted-foreground mt-2">Navigation Sections</div>
-            </div>
-            <div className="rounded-lg border bg-card p-6 text-center hover:border-primary/30 transition-colors">
-              <div className="text-4xl font-bold text-primary">
-                {navigation.reduce((acc, nav) => acc + (nav.categories?.length || 0), 0)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-2">Total Categories</div>
-            </div>
-            <div className="rounded-lg border bg-card p-6 text-center hover:border-primary/30 transition-colors">
-              <div className="text-4xl font-bold text-primary">Live</div>
-              <div className="text-sm text-muted-foreground mt-2">Real-time Updates</div>
-            </div>
-            <div className="rounded-lg border bg-card p-6 text-center hover:border-primary/30 transition-colors">
-              <div className="text-4xl font-bold text-primary">1000+</div>
-              <div className="text-sm text-muted-foreground mt-2">Books Available</div>
-            </div>
+/**
+ * Covers standing on a rule, bottom-aligned the way books sit on a shelf. Heights vary by
+ * position rather than at random so the row does not reshuffle its own geometry on every
+ * render.
+ */
+function Shelf({ products, isLoading }: { products: any[]; isLoading: boolean }) {
+  const heights = ['h-40', 'h-48', 'h-44', 'h-52', 'h-44']
+
+  if (isLoading && products.length === 0) {
+    return (
+      <div className="scrollbar-thin flex items-end gap-4 overflow-x-auto border-b-2 border-foreground/80">
+        {heights.map((height, i) => (
+          <div key={i} className={`skeleton w-28 ${height} rounded-none rounded-t-sm`} />
+        ))}
+      </div>
+    )
+  }
+
+  if (products.length === 0) return null
+
+  return (
+    <div className="scrollbar-thin flex items-end gap-4 overflow-x-auto border-b-2 border-foreground/80 sm:gap-6">
+      {products.map((product, i) => (
+        <Link
+          key={`${product.category?.id}-${product.id}`}
+          href={`/products/${product.source_id}`}
+          title={product.title}
+          className="group relative block flex-shrink-0 transition-transform duration-300 hover:-translate-y-1"
+        >
+          <div
+            className={`relative w-24 ${heights[i % heights.length]} overflow-hidden rounded-t-sm bg-white shadow-rise sm:w-28`}
+          >
+            <Image
+              src={product.image_url}
+              alt={product.title}
+              fill
+              className="object-cover"
+              sizes="112px"
+            />
           </div>
-        </section>
-      )}
+        </Link>
+      ))}
     </div>
   )
 }

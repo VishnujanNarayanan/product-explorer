@@ -2,65 +2,90 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Wifi, WifiOff, Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { webSocketClient } from "@/lib/api/websocket"
 
-export function WebSocketStatus({ className }: { className?: string }) {
+interface WebSocketStatusProps {
+  className?: string
+  /** Style for the dark navigation band rather than a light surface. */
+  onBrand?: boolean
+}
+
+/**
+ * What the live browser session is doing right now.
+ *
+ * Three states, because "connected" and "working" are different facts and the bar was
+ * reporting only the first: a socket can sit open for minutes without a scrape running,
+ * and "Live session" during that time reads as a claim that something is happening.
+ */
+export function WebSocketStatus({ className, onBrand = false }: WebSocketStatusProps) {
   const [isConnected, setIsConnected] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [isScraping, setIsScraping] = useState(false)
 
   useEffect(() => {
-    const handleConnect = () => {
-      setIsConnected(true)
-      setSessionId(webSocketClient.getSessionId())
-    }
-
+    const handleConnect = () => setIsConnected(true)
     const handleDisconnect = () => {
       setIsConnected(false)
-      setSessionId(null)
+      setIsScraping(false)
     }
 
-    // Initial state
-    setIsConnected(webSocketClient.isConnected())
-    setSessionId(webSocketClient.getSessionId())
+    // The session reports each step it reaches; only 'scraping' means work in flight.
+    const handleScrapeStatus = (data: any) => {
+      const status = data?.payload?.status
+      if (status === 'scraping' || status === 'active') setIsScraping(true)
+      if (status === 'ready' || status === 'idle' || status === 'error') setIsScraping(false)
+    }
 
-    // Listen for changes
+    // A chunk landing means that request is done, whatever the last status said.
+    const handleDataChunk = () => setIsScraping(false)
+    const handleError = () => setIsScraping(false)
+
+    setIsConnected(webSocketClient.isConnected())
+
     webSocketClient.on('connected', handleConnect)
     webSocketClient.on('disconnected', handleDisconnect)
-    webSocketClient.on('session-ready', () => {
-      setSessionId(webSocketClient.getSessionId())
-    })
+    webSocketClient.on('scrape-status', handleScrapeStatus)
+    webSocketClient.on('data-chunk', handleDataChunk)
+    webSocketClient.on('error', handleError)
 
     return () => {
       webSocketClient.off('connected', handleConnect)
       webSocketClient.off('disconnected', handleDisconnect)
+      webSocketClient.off('scrape-status', handleScrapeStatus)
+      webSocketClient.off('data-chunk', handleDataChunk)
+      webSocketClient.off('error', handleError)
     }
   }, [])
 
+  const label = !isConnected ? 'Stored data' : isScraping ? 'Scraping live' : 'Session ready'
+  const title = !isConnected
+    ? 'No live session — results come from stored data'
+    : isScraping
+      ? 'A scrape is running on World of Books right now'
+      : 'Connected to the live browser session, waiting for a category'
+
   return (
-    <div className={cn("flex items-center gap-2 text-sm", className)}>
-      {isConnected ? (
-        <>
-          <div className="flex items-center gap-1.5 text-green-600">
-            <div className="relative">
-              <Wifi className="h-4 w-4" />
-              <Circle className="h-2 w-2 absolute -top-0.5 -right-0.5 fill-green-600 text-green-600 animate-ping" />
-            </div>
-            <span className="font-medium">Live</span>
-          </div>
-          {sessionId && (
-            <span className="text-xs text-muted-foreground font-mono">
-              {sessionId.slice(0, 8)}...
-            </span>
-          )}
-        </>
-      ) : (
-        <div className="flex items-center gap-1.5 text-red-600">
-          <WifiOff className="h-4 w-4" />
-          <span className="font-medium">Offline</span>
-        </div>
+    <div
+      className={cn(
+        "flex items-center gap-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em]",
+        onBrand ? "text-brand-muted" : "text-muted-foreground",
+        isScraping && "text-highlight",
+        className,
       )}
+      title={title}
+    >
+      <span className="relative flex h-1.5 w-1.5">
+        {isScraping && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-highlight opacity-75" />
+        )}
+        <span
+          className={cn(
+            "relative inline-flex h-1.5 w-1.5 rounded-full",
+            isScraping ? "bg-highlight" : isConnected ? "bg-primary" : "bg-muted-foreground/60",
+          )}
+        />
+      </span>
+      {label}
     </div>
   )
 }
