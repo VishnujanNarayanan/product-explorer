@@ -1,8 +1,7 @@
 "use client"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { FolderOpen, ArrowRight, Sparkles } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { ArrowRight } from "lucide-react"
 import { Category } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -24,7 +23,7 @@ export function CategoryCard({ category, className }: CategoryCardProps) {
   const handleCategoryClick = async (e: React.MouseEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
+
     try {
       // Open the section's menu in the live browser session before the products page asks
       // it to click this category, mirroring how a person would reach it on the site.
@@ -32,9 +31,7 @@ export function CategoryCard({ category, className }: CategoryCardProps) {
         webSocketClient.hoverNavigation(navigationSlug, navigationSlug)
       }
 
-      // Navigate to products page
       router.push(`/products?category=${category.slug}&navigation=${navigationSlug}`)
-
     } catch (error: any) {
       toast({
         title: "Error",
@@ -46,35 +43,25 @@ export function CategoryCard({ category, className }: CategoryCardProps) {
   }
 
   return (
-    <Card 
-      className={cn(
-        "group cursor-pointer transition-all duration-300 hover:shadow-lg hover:border-primary/50 overflow-hidden",
-        className
-      )}
+    <a
+      href={`/products?category=${category.slug}&navigation=${navigationSlug}`}
       onClick={handleCategoryClick}
+      className={cn(
+        "group flex items-center justify-between gap-4 rounded-lg border border-l-2 border-l-transparent bg-card p-5 transition-colors hover:border-l-highlight hover:bg-secondary/50",
+        className,
+      )}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FolderOpen className="w-4 h-4 text-primary" />
-            {category.title}
-          </CardTitle>
-          <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {category.product_count > 0 && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              {category.product_count} product{category.product_count !== 1 ? 's' : ''}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {isLoading ? "Loading..." : "Click to browse"}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{category.title}</span>
+        <span className="mt-1 block font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
+          {isLoading
+            ? 'opening…'
+            : category.product_count > 0
+              ? `${category.product_count} stored`
+              : 'not scraped yet'}
+        </span>
+      </span>
+      <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+    </a>
   )
 }

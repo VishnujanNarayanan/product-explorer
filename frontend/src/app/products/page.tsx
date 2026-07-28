@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ProductGrid } from "@/components/product/ProductGrid"
 import { Breadcrumb } from "@/components/shared/Breadcrumb"
+import { SideRail } from "@/components/layout/SideRail"
 import { useProducts } from "@/lib/hooks/useProducts"
 import { useCategories } from "@/lib/hooks/useCategories"
 import { useNavigation } from "@/lib/hooks/useNavigation"
@@ -14,7 +15,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { Button } from "@/components/ui/Button"
 import { ScrapeAgainButton } from "@/components/shared/ScrapeAgainButton"
 import { useToast } from "@/lib/hooks/useToast"
-import { RefreshCw, ArrowLeft, Loader2, ShoppingBag, Sparkles } from "lucide-react"
+import { RefreshCw, ArrowLeft, Loader2, ShoppingBag } from "lucide-react"
 
 function ProductsPageContent() {
   const searchParams = useSearchParams()
@@ -378,76 +379,51 @@ function ProductsPageContent() {
       : null
 
   return (
-    <div className="space-y-8">
+    <div className="container space-y-8 py-8">
       <Breadcrumb items={breadcrumbItems} />
 
-      <div className="flex items-start gap-8">
-        {/* Sidebar - Category Switcher */}
-        <div className="w-72 flex-shrink-0">
-          <div className="sticky top-8 rounded-xl border bg-gradient-to-b from-card to-card/80 backdrop-blur-sm shadow-lg p-6 space-y-4">
-            <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Categories
-              </h3>
-              <p className="text-xs text-muted-foreground/70">
-                From: {currentNav?.title || 'Unknown'}
-              </p>
-            </div>
-            <div className="space-y-1.5 max-h-96 overflow-y-auto">
-              {isLoadingCategories ? (
-                <div className="flex justify-center py-6">
-                  <LoadingSpinner size="sm" />
-                </div>
-              ) : categories.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No categories
-                </p>
-              ) : (
-                categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryChange(category.slug)}
-                    className={`w-full rounded-lg px-4 py-3 text-left text-sm font-medium transition-all duration-200 flex items-center justify-between ${
-                      categorySlug === category.slug
-                        ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md"
-                        : "text-foreground hover:bg-accent/50 border border-transparent"
-                    }`}
-                  >
-                    <span className="truncate">{category.title}</span>
-                    {category.product_count > 0 && (
-                      <span className="text-xs opacity-75 ml-2 flex-shrink-0 bg-white/20 px-2 py-1 rounded">
-                        {category.product_count}
-                      </span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col items-start gap-10 lg:flex-row">
+        <SideRail
+          label="Categories"
+          context={currentNav?.title}
+          isLoading={isLoadingCategories}
+          emptyMessage="No categories stored for this section"
+          items={categories.map((category) => ({
+            id: category.id,
+            title: category.title,
+            count: category.product_count,
+            isActive: categorySlug === category.slug,
+          }))}
+          onSelect={(item) => {
+            const category = categories.find((c) => c.id === item.id)
+            if (category) handleCategoryChange(category.slug)
+          }}
+        />
 
         {/* Main Content */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {/* Header */}
-          <div className="mb-12">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="mb-10 border-b pb-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex-1">
-                <h1 className="text-5xl font-bold tracking-tight mb-3">
+                <p className="label-meta">{currentNav?.title || 'Catalogue'}</p>
+                <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">
                   {currentCategory?.title || 'Products'}
                 </h1>
-                <p className="text-lg text-muted-foreground max-w-2xl">
-                  {isLoading 
-                    ? "Loading products..." 
-                    : showProducts 
-                    ? `${displayProducts.length} book${displayProducts.length !== 1 ? 's' : ''} available`
-                    : "Discover books in this category"
-                  }
-                  {isWsConnected && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-sm bg-green-500/10 text-green-600 px-2 py-1 rounded">
-                      <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-                      Live
-                    </span>
-                  )}
+                <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                  <span>
+                    {isLoading
+                      ? 'Loading books…'
+                      : showProducts
+                        ? `${displayProducts.length} book${displayProducts.length !== 1 ? 's' : ''} on this page`
+                        : 'No books yet'}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <span>
+                    {isWsConnected
+                      ? `${totalScraped} scraped in this session`
+                      : 'served from storage'}
+                  </span>
                 </p>
               </div>
               <div className="flex gap-3">
@@ -490,49 +466,53 @@ function ProductsPageContent() {
             </div>
           </div>
 
-          {/* Loading State */}
+          {/* Working, with nothing on screen yet. Skeleton tiles rather than a spinner, so
+              the page keeps the shape of what is about to arrive. */}
           {showLoadingState && (
-            <div className="flex flex-col items-center justify-center py-24">
-              <div className="rounded-full bg-primary/10 p-6 mb-6 animate-pulse">
-                <Sparkles className="h-12 w-12 text-primary animate-spin" />
-              </div>
-              <p className="text-xl font-semibold text-foreground">
-                {isPolling || (isWsConnected && scraperStatus === 'scraping')
-                  ? "Scraping Products..."
-                  : "Loading Products..."
-                }
-              </p>
-              <p className="text-muted-foreground mt-2 text-center max-w-md">
-                {progressLine}
-              </p>
-              {retryLine && (
-                <p className="mt-2 text-sm font-medium text-primary">{retryLine}</p>
-              )}
-              {(isPolling || (isWsConnected && scraperStatus === 'scraping')) && (
-                <div className="mt-6 text-sm text-muted-foreground text-center">
-                  <p>This may take a minute — nothing has failed, it is still running.</p>
-                  {isWsConnected && totalScraped > 0 && (
-                    <p className="mt-1">Scraped {totalScraped} products so far</p>
-                  )}
+            <div className="space-y-8">
+              <div className="flex items-start gap-3 rounded-lg border bg-card p-4">
+                <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {isPolling || (isWsConnected && scraperStatus === 'scraping')
+                      ? 'Walking the category on World of Books'
+                      : 'Loading books'}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{progressLine}</p>
+                  <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
+                    {retryLine ? `${retryLine} · ` : ''}
+                    {isWsConnected && totalScraped > 0
+                      ? `${totalScraped} scraped so far`
+                      : 'this usually takes under a minute'}
+                  </p>
                 </div>
-              )}
+              </div>
+
+              <div className="grid gap-5 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="overflow-hidden rounded-lg border">
+                    <div className="skeleton aspect-[3/4] rounded-none" />
+                    <div className="space-y-2 border-t p-4">
+                      <div className="skeleton h-4" />
+                      <div className="skeleton h-3 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Empty State */}
           {showEmptyState && (
-            <div className="rounded-xl border border-dashed bg-card/30 p-16 text-center">
-              <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-lg font-medium text-foreground mb-2">
-                No products found yet
+            <div className="rounded-lg border border-dashed p-12 text-center">
+              <p className="font-medium">The scrape came back empty</p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                World of Books returned no books for this category. Asking again sometimes
+                helps — the listing is paged and the first page can be empty.
               </p>
-              <p className="text-muted-foreground mb-6">
-                The scrape finished without returning anything for this category. Refreshing
-                asks World of Books again.
-              </p>
-              <Button onClick={handleRefresh} size="lg" variant="outline">
+              <Button onClick={handleRefresh} className="mt-6" variant="outline">
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Products
+                Ask again
               </Button>
             </div>
           )}
@@ -540,17 +520,19 @@ function ProductsPageContent() {
           {/* Still working, with products already on screen. Says plainly that more is
               coming, so a fallback to stored data does not read as a dead end. */}
           {isWorkingInBackground && (
-            <div className="mb-6 flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-              <Loader2 className="mt-0.5 h-5 w-5 flex-shrink-0 animate-spin text-primary" />
+            <div className="mb-6 flex items-start gap-3 rounded-lg border-l-2 border-l-highlight bg-secondary/60 p-4">
+              <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-highlight" />
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">
                   {wsSource === 'stored'
-                    ? 'Showing stored products while the scrape continues'
-                    : 'Still fetching more products'}
+                    ? 'Showing stored books while the scrape continues'
+                    : 'Still fetching more books'}
                 </p>
                 <p className="text-sm text-muted-foreground">{progressLine}</p>
                 {retryLine && (
-                  <p className="mt-1 text-xs font-medium text-primary">{retryLine}</p>
+                  <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
+                    {retryLine}
+                  </p>
                 )}
               </div>
             </div>
@@ -559,32 +541,6 @@ function ProductsPageContent() {
           {/* Products Grid */}
           {showProducts && (
             <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    {displayProducts.length} Product{displayProducts.length !== 1 ? 's' : ''}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {isWsConnected 
-                      ? `${totalScraped} scraped in real-time` 
-                      : 'From database cache'
-                    }
-                  </p>
-                </div>
-                
-                {isWsConnected && scraperStatus === 'ready' && wsHasMore && (
-                  <Button
-                    onClick={handleLoadMore}
-                    disabled={isWsLoading}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Load More ({40} more)
-                  </Button>
-                )}
-              </div>
-              
               <ProductGrid
                 products={displayProducts}
                 isLoading={false}
