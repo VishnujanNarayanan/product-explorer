@@ -54,8 +54,14 @@ export function ProductGrid({
         <h2 className="mb-6 font-display text-2xl font-semibold">{title}</h2>
       )}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+        {products.map((product, index) => (
+          // Live results arrive from the scraper before they have a database id, and the
+          // same source_id legitimately appears under two categories, so neither field is
+          // a key on its own.
+          <ProductCard
+            key={`${product.category?.id ?? 'live'}-${product.source_id ?? product.id ?? index}`}
+            product={product}
+          />
         ))}
       </div>
       {showLoadMore && hasMore && (

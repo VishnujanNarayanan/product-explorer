@@ -88,7 +88,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-7">
+          {/* min-w-0: without it the shelf's own min-content width pushes the grid track
+              wider than the viewport, and the whole page scrolls sideways on a phone. */}
+          <div className="min-w-0 lg:col-span-7">
             <Shelf products={shelf} isLoading={isLoadingProducts} />
           </div>
         </div>
@@ -239,7 +241,7 @@ function Shelf({ products, isLoading }: { products: any[]; isLoading: boolean })
 
   if (isLoading && products.length === 0) {
     return (
-      <div className="flex items-end gap-4 border-b-2 border-foreground/80 pb-0">
+      <div className="scrollbar-thin flex items-end gap-4 overflow-x-auto border-b-2 border-foreground/80">
         {heights.map((height, i) => (
           <div key={i} className={`skeleton w-28 ${height} rounded-none rounded-t-sm`} />
         ))}
@@ -250,7 +252,7 @@ function Shelf({ products, isLoading }: { products: any[]; isLoading: boolean })
   if (products.length === 0) return null
 
   return (
-    <div className="flex items-end gap-4 overflow-hidden border-b-2 border-foreground/80 sm:gap-6">
+    <div className="scrollbar-thin flex items-end gap-4 overflow-x-auto border-b-2 border-foreground/80 sm:gap-6">
       {products.map((product, i) => (
         <Link
           key={`${product.category?.id}-${product.id}`}
