@@ -56,21 +56,32 @@ export class BackgroundScraperProcessor {
     });
 
     try {
-      // Pull a couple of pages for a user-triggered refresh; resumes from the checkpoint.
-      const result = await this.categoryScraper.scrape(target, {
-        startPage: await this.nextPageFor(target),
-        maxPages: 2,
-      });
+      // A slug can name more than one category — the same collection under two headings —
+      // and each keeps its own checkpoint, so each is refreshed from where it stopped.
+      const categories = await this.categoriesForSlug(target);
+      if (categories.length === 0) {
+        throw new Error(`Category not found: ${target}`);
+      }
 
-      await this.saveCategoryProducts(target, result);
+      let total = 0;
+      for (const category of categories) {
+        // Pull a couple of pages for a user-triggered refresh; resumes from the checkpoint.
+        const result = await this.categoryScraper.scrape(category.slug, {
+          startPage: this.nextPageFor(category),
+          maxPages: 2,
+        });
+
+        await this.saveCategoryProducts(category, result);
+        total += result.products.length;
+      }
 
       await this.scrapeJobRepo.update(scrapeJob.id, {
         status: 'completed',
         finished_at: new Date(),
       });
 
-      this.logger.log(`[HIGH] Category ${target} refreshed: ${result.products.length} products`);
-      
+      this.logger.log(`[HIGH] Category ${target} refreshed: ${total} products`);
+
     } catch (error) {
       this.logger.error(`[HIGH] Failed to refresh category ${target}:`, error);
       await this.scrapeJobRepo.update(scrapeJob.id, {
@@ -107,11 +118,11 @@ export class BackgroundScraperProcessor {
       try {
         // One page per stale category, resuming where the last run stopped.
         const result = await this.categoryScraper.scrape(category.slug, {
-          startPage: (category.last_page_scraped || 0) + 1,
+          startPage: this.nextPageFor(category),
           maxPages: 1,
         });
 
-        await this.saveCategoryProducts(category.slug, result);
+        await this.saveCategoryProducts(category, result);
 
         this.logger.log(`[MEDIUM] Refreshed stale category ${category.slug}: ${result.products.length} products`);
         
@@ -134,7 +145,9 @@ export class BackgroundScraperProcessor {
     
     // Get all categories
     const allCategories = await this.categoryRepo.find({
-      select: ['id', 'slug', 'title'],
+      // last_page_scraped comes along because the scan resumes each category from its
+      // own checkpoint rather than restarting at page 1.
+      select: ['id', 'slug', 'title', 'last_page_scraped'],
     });
 
     this.logger.log(`[LOW] Will scan ${allCategories.length} categories`);
@@ -144,11 +157,11 @@ export class BackgroundScraperProcessor {
       try {
         // Very slow background scan: one page per category, respectful to the target site.
         const result = await this.categoryScraper.scrape(category.slug, {
-          startPage: await this.nextPageFor(category.slug),
+          startPage: this.nextPageFor(category),
           maxPages: 1,
         });
 
-        await this.saveCategoryProducts(category.slug, result);
+        await this.saveCategoryProducts(category, result);
 
         processed++;
         this.logger.log(`[LOW] Scanned ${category.slug} (${processed}/${allCategories.length}): ${result.products.length} products`);
@@ -208,14 +221,17 @@ export class BackgroundScraperProcessor {
           where: { slug: categoryItem.parentSlug } 
         });
 
-        const existingCategory = await this.categoryRepo.findOne({ 
-          where: { slug: categoryItem.slug } 
+        // Scoped to the heading — the same collection under another heading is its own row.
+        if (!parentNav) continue;
+
+        const existingCategory = await this.categoryRepo.findOne({
+          where: { slug: categoryItem.slug, navigation: { id: parentNav.id } },
         });
 
         if (existingCategory) {
           existingCategory.last_scraped_at = new Date();
           await this.categoryRepo.save(existingCategory);
-        } else if (parentNav) {
+        } else {
           const newCategory = this.categoryRepo.create({
             title: categoryItem.title,
             slug: categoryItem.slug,
@@ -245,25 +261,18 @@ export class BackgroundScraperProcessor {
   }
 
   private async saveCategoryProducts(
-    categorySlug: string,
+    category: Category,
     result: CategoryScrapeResult,
   ): Promise<void> {
-    const category = await this.categoryRepo.findOne({
-      where: { slug: categorySlug },
-    });
-
-    if (!category) {
-      this.logger.warn(`Category ${categorySlug} not found`);
-      return;
-    }
-
+    const categorySlug = category.slug;
     let saved = 0;
     let updated = 0;
 
     for (const productData of result.products) {
       try {
+        // Scoped to this category: source_id is unique per category, not globally.
         const existingProduct = await this.productRepo.findOne({
-          where: { source_id: productData.source_id },
+          where: { source_id: productData.source_id, category: { id: category.id } },
         });
 
         if (existingProduct) {
@@ -312,9 +321,16 @@ export class BackgroundScraperProcessor {
     this.logger.log(`Saved ${saved} new, updated ${updated} products for ${categorySlug}`);
   }
 
+  /**
+   * Every category row carrying this slug. A collection listed under two headings is two
+   * rows with two checkpoints and two product lists, and a refresh has to fill both.
+   */
+  private async categoriesForSlug(categorySlug: string): Promise<Category[]> {
+    return this.categoryRepo.find({ where: { slug: categorySlug }, order: { id: 'ASC' } });
+  }
+
   /** Next unfetched listing page for a category, from its stored checkpoint. */
-  private async nextPageFor(categorySlug: string): Promise<number> {
-    const category = await this.categoryRepo.findOne({ where: { slug: categorySlug } });
-    return (category?.last_page_scraped || 0) + 1;
+  private nextPageFor(category: Category): number {
+    return (category.last_page_scraped || 0) + 1;
   }
 }

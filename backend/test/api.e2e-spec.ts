@@ -25,6 +25,10 @@ describe('API (integration)', () => {
   const NAV_SLUG = 'e2e-fiction';
   const CAT_SLUG = 'e2e-fantasy';
   const EMPTY_CAT_SLUG = 'e2e-empty';
+  // The same collection listed under two headings, as World of Books lists "Trending Now"
+  // under both Fiction and Non-Fiction.
+  const OTHER_NAV_SLUG = 'e2e-non-fiction';
+  const SHARED_CAT_SLUG = 'e2e-trending';
   const SOURCE_IDS = ['e2e-product-1', 'e2e-product-2', 'e2e-product-3'];
 
   beforeAll(async () => {
@@ -75,6 +79,40 @@ describe('API (integration)', () => {
       navigation: nav,
       is_exhausted: true,
     });
+
+    // The same slug under two headings: two rows, each with its own products. A globally
+    // unique slug used to collapse these into one and lose a sidebar entry.
+    const otherNav = await dataSource
+      .getRepository(Navigation)
+      .save({ title: 'E2E Non-Fiction', slug: OTHER_NAV_SLUG });
+
+    const sharedUnderFiction = await dataSource.getRepository(Category).save({
+      title: 'E2E Trending (Fiction)',
+      slug: SHARED_CAT_SLUG,
+      navigation: nav,
+      is_exhausted: true,
+    });
+
+    const sharedUnderNonFiction = await dataSource.getRepository(Category).save({
+      title: 'E2E Trending (Non-Fiction)',
+      slug: SHARED_CAT_SLUG,
+      navigation: otherNav,
+      is_exhausted: true,
+    });
+
+    // One book, filed under both copies — the site lists it in both places.
+    await dataSource.getRepository(Product).save(
+      [sharedUnderFiction, sharedUnderNonFiction].map((category) => ({
+        source_id: 'e2e-shared-product',
+        title: 'E2E Shared Product',
+        author: 'E2E Author',
+        price: 5.5,
+        currency: 'GBP',
+        image_url: 'https://cdn.shopify.com/s/files/1/0784/4072/6801/files/example.jpg',
+        source_url: 'https://www.worldofbooks.com/en-gb/products/e2e-shared-product',
+        category,
+      })),
+    );
 
     await dataSource.getRepository(Product).save(
       SOURCE_IDS.map((sourceId, i) => ({
@@ -155,6 +193,51 @@ describe('API (integration)', () => {
 
     it('answers 404 for a slug that does not exist', async () => {
       await request(app.getHttpServer()).get('/api/categories/e2e-no-such-thing').expect(404);
+    });
+
+    // A slug identifies a category only within a heading.
+    it('returns the heading\'s own copy when the slug is shared', async () => {
+      const fiction = await request(app.getHttpServer())
+        .get(`/api/categories/${SHARED_CAT_SLUG}?navigation=${NAV_SLUG}`)
+        .expect(200);
+      const nonFiction = await request(app.getHttpServer())
+        .get(`/api/categories/${SHARED_CAT_SLUG}?navigation=${OTHER_NAV_SLUG}`)
+        .expect(200);
+
+      expect(fiction.body.title).toBe('E2E Trending (Fiction)');
+      expect(nonFiction.body.title).toBe('E2E Trending (Non-Fiction)');
+      expect(fiction.body.id).not.toBe(nonFiction.body.id);
+    });
+
+    it('answers 404 for a slug that exists under a different heading', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/categories/${CAT_SLUG}?navigation=${OTHER_NAV_SLUG}`)
+        .expect(404);
+    });
+  });
+
+  describe('a collection listed under two headings', () => {
+    it('lists it once in each heading', async () => {
+      for (const navSlug of [NAV_SLUG, OTHER_NAV_SLUG]) {
+        const res = await request(app.getHttpServer())
+          .get(`/api/categories?navigation=${navSlug}`)
+          .expect(200);
+        expect(
+          res.body.filter((c: { slug: string }) => c.slug === SHARED_CAT_SLUG),
+        ).toHaveLength(1);
+      }
+    });
+
+    // The whole point of keying products per category: the second heading's scrape must not
+    // move the products off the first one.
+    it('serves the same book from both copies', async () => {
+      for (const navSlug of [NAV_SLUG, OTHER_NAV_SLUG]) {
+        const res = await request(app.getHttpServer())
+          .get(`/api/categories/${SHARED_CAT_SLUG}/products?navigation=${navSlug}`)
+          .expect(200);
+        expect(res.body.total).toBe(1);
+        expect(res.body.products[0].source_id).toBe('e2e-shared-product');
+      }
     });
   });
 

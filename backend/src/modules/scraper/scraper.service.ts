@@ -19,6 +19,7 @@ import { Product } from '../../entities/product.entity';
 import { ProductDetail } from '../../entities/product-detail.entity';
 import { Review } from '../../entities/review.entity';
 import { ScrapeJob } from '../../entities/scrape-job.entity';
+import { findCategory } from '../../common/category-lookup';
 
 @Injectable()
 export class ScraperService implements OnModuleInit {
@@ -133,16 +134,19 @@ export class ScraperService implements OnModuleInit {
           where: { slug: categoryItem.parentSlug } 
         });
 
-        const existingCategory = await this.categoryRepo.findOne({ 
-          where: { slug: categoryItem.slug } 
+        // Scoped to the heading: the same collection under a different heading is a
+        // separate row, so matching on the slug alone would keep overwriting one row.
+        if (!parentNav) continue;
+
+        const existingCategory = await this.categoryRepo.findOne({
+          where: { slug: categoryItem.slug, navigation: { id: parentNav.id } },
         });
 
         if (existingCategory) {
           existingCategory.title = categoryItem.title;
-          if (parentNav) existingCategory.navigation = parentNav;
           existingCategory.last_scraped_at = new Date();
           await this.categoryRepo.save(existingCategory);
-        } else if (parentNav) {
+        } else {
           const newCategory = this.categoryRepo.create({
             title: categoryItem.title,
             slug: categoryItem.slug,
@@ -178,7 +182,7 @@ export class ScraperService implements OnModuleInit {
 
   async scrapeCategoryBySlug(
     slug: string,
-    options: { page?: number; limit?: number } = {},
+    options: { page?: number; limit?: number; navigationSlug?: string } = {},
   ): Promise<{
     message: string;
     products: Product[];
@@ -193,8 +197,10 @@ export class ScraperService implements OnModuleInit {
     const limit = Math.min(100, Math.max(1, options.limit ?? 24));
 
     // The page and size are part of the identity of the result. Caching on the slug alone
-    // would serve page 1's rows for every subsequent page.
-    const cacheKey = `category_${slug}_p${page}_l${limit}`;
+    // would serve page 1's rows for every subsequent page. The heading belongs in the key
+    // too — the same slug under two headings is two categories with two product lists.
+    const navigationSlug = options.navigationSlug;
+    const cacheKey = `category_${navigationSlug ?? '_'}_${slug}_p${page}_l${limit}`;
     const cached = await this.cacheManager.get<{
       products: Product[];
       category?: Category;
@@ -217,14 +223,15 @@ export class ScraperService implements OnModuleInit {
       };
     }
 
-    const category = await this.categoryRepo.findOne({
-      where: { slug },
-      relations: ['navigation']
-    });
+    const category = await findCategory(this.categoryRepo, slug, navigationSlug, ['navigation']);
 
     if (!category) {
       // A missing category is a client error, not a server fault.
-      throw new NotFoundException(`Category not found: ${slug}`);
+      throw new NotFoundException(
+        navigationSlug
+          ? `Category not found: ${slug} under ${navigationSlug}`
+          : `Category not found: ${slug}`,
+      );
     }
 
     // Queue another page only while the collection still has one. Fully-scraped categories
@@ -280,9 +287,13 @@ export class ScraperService implements OnModuleInit {
     }
 
     try {
-      const product = await this.productRepo.findOne({ 
+      // A product can now exist once per category, but its detail page is the same page
+      // whichever category it was reached through. Resolve to the oldest row so detail is
+      // scraped and stored once rather than per copy.
+      const product = await this.productRepo.findOne({
         where: { source_id: sourceId },
         relations: ['detail', 'reviews', 'category'],
+        order: { id: 'ASC' },
       });
 
       if (!product) {
@@ -333,9 +344,8 @@ export class ScraperService implements OnModuleInit {
         }
 
         case 'category': {
-          const category = await this.categoryRepo.findOne({
-            where: { slug: target }
-          });
+          // No heading to scope by on this legacy route, so the oldest matching row wins.
+          const category = await findCategory(this.categoryRepo, target);
 
           if (!category) {
             throw new NotFoundException(`Category not found: ${target}`);

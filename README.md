@@ -8,7 +8,7 @@ data fetched by live, on-demand scraping and persisted to PostgreSQL.
 
 ```
 Navigation headings  →  Categories  →  Product grid  →  Product detail
-   (6 headings)         (113 links)    (paged, 24/pg)    (specs + related)
+   (6 headings)        (143 listings)  (paged, 24/pg)    (specs + related)
 ```
 
 ---
@@ -50,7 +50,8 @@ Key decisions and why:
 
 | Decision | Reasoning |
 | --- | --- |
-| **PostgreSQL**, not a document store | The domain is inherently relational — navigation owns categories, categories own products, products own detail — and the required uniqueness on `source_id`/`source_url` maps directly onto SQL constraints used for deduplication |
+| **PostgreSQL**, not a document store | The domain is inherently relational — navigation owns categories, categories own products, products own detail — and the required uniqueness maps directly onto SQL constraints used for deduplication |
+| **A category is (heading, slug)**, not a slug | The menu lists the same collection under several headings — "Trending Now" under both Fiction and Non-Fiction. A globally unique slug dropped the second listing, so the sidebar showed 25 entries where the site shows 27. Each listing is now its own row with its own checkpoint, and `source_id` is unique per category so the second listing's scrape cannot move products off the first |
 | **Queue the scrape, serve stored data** | Keeps request latency independent of a third-party site that takes seconds per page |
 | **Checkpoint per category** (`last_page_scraped`, `is_exhausted`) | Browsing fills the catalogue progressively instead of bulk-downloading, and a finished collection stops generating traffic entirely |
 | **JSON feed for listings, browser for detail** | The listing grid is client-rendered by Algolia and never resolves headless; detail pages are server-rendered ([details](#why-listings-use-the-json-feed)) |
@@ -178,12 +179,12 @@ cd backend && npm run openapi:export
 | `GET` | `/api/health` | | Liveness + database connectivity |
 | `GET` | `/api/navigation` | | Navigation headings with their categories |
 | `GET` | `/api/categories` | `navigation` | All categories, optionally one heading's |
-| `GET` | `/api/categories/:slug` | | One category |
-| `GET` | `/api/categories/:slug/products` | `page`, `limit` | Products in a category |
+| `GET` | `/api/categories/:slug` | `navigation` | One category |
+| `GET` | `/api/categories/:slug/products` | `navigation`, `page`, `limit` | Products in a category |
 | `GET` | `/api/products` | `category`, `page`, `limit` | Paged product listing |
 | `GET` | `/api/products/:sourceId` | `refresh` | Product with detail, scraping on demand |
 | `POST` | `/api/scrape/navigation` | | Re-scrape navigation |
-| `POST` | `/api/scrape/category/:slug` | `page`, `limit` | Queue a listing scrape (returns immediately) |
+| `POST` | `/api/scrape/category/:slug` | `navigation`, `page`, `limit` | Queue a listing scrape (returns immediately) |
 | `POST` | `/api/scrape/product/:sourceId` | | Queue a detail scrape; body `{ "refresh": bool }` |
 | `GET` | `/api/jobs/:id` | | Scrape job status |
 | `POST` | `/api/cleanup` | | Drop stale rows |
@@ -273,12 +274,22 @@ fabricated data in front of users.
 | Table | Purpose |
 | --- | --- |
 | `navigation` | Top-level headings |
-| `category` | Categories per heading, plus the listing checkpoint |
-| `product` | Product tiles — `source_id`/`source_url` unique for deduplication |
+| `category` | Categories per heading, plus the listing checkpoint — unique on `(navigation_id, slug)` |
+| `product` | Product tiles — unique on `(category_id, source_id)`, so a collection listed under two headings fills both |
 | `product_detail` | Description, specs (JSONB), rating fields |
 | `review` | Present for schema completeness; unpopulated (see above) |
 | `scrape_job` | Job lifecycle, status and error log |
 | `view_history` | Client browsing history |
+
+The init hook only runs when the Postgres volume is first created. A database created
+before categories were keyed by `(navigation_id, slug)` is migrated by applying the same
+file to it — the constraint changes in it are written to be idempotent:
+
+```bash
+docker exec -i product-explorer-postgres-1 \
+  psql -U admin -d wob_explorer < backend/database/schema.sql
+curl -X POST http://localhost:3001/api/scrape/navigation   # pick up the extra listings
+```
 
 ### Seed data
 

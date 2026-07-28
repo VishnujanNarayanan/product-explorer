@@ -1,9 +1,19 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { Navigation } from './navigation.entity';
 import { Product } from './product.entity';
 
+/**
+ * A collection as it appears under one navigation heading.
+ *
+ * The identity is (navigation, slug), not the slug alone. World of Books lists the same
+ * collection under more than one heading — "Trending Now" sits under both Fiction and
+ * Non-Fiction — and a globally unique slug silently dropped the second occurrence, so the
+ * sidebar showed 25 categories where the site shows 27. Each occurrence is now its own row
+ * with its own checkpoint and its own products.
+ */
 @Entity('category')
+@Index('uq_category_navigation_slug', ['navigation', 'slug'], { unique: true })
 export class Category {
   @ApiProperty({ example: 11 })
   @PrimaryGeneratedColumn()
@@ -13,8 +23,13 @@ export class Category {
   @Column()
   title: string;
 
-  @ApiProperty({ example: 'fantasy-fiction-books' })
-  @Column({ unique: true })
+  @ApiProperty({
+    example: 'fantasy-fiction-books',
+    description:
+      'The Shopify collection handle. Unique per navigation heading, not globally — the ' +
+      'same collection can be listed under several headings.',
+  })
+  @Column()
   slug: string;
 
   @ApiProperty({ example: 0 })

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Navigation } from '../../entities/navigation.entity';
 import { Category } from '../../entities/category.entity';
+import { findCategory } from '../../common/category-lookup';
 
 @Injectable()
 export class CoreService {
@@ -44,11 +45,17 @@ export class CoreService {
     });
   }
 
-  async getCategoryBySlug(slug: string): Promise<Category | null> {
-    return this.categoryRepository.findOne({
-      where: { slug },
-      relations: ['navigation', 'children', 'parent', 'products'],
-    });
+  /**
+   * A slug identifies a category only within a navigation heading, so callers that know the
+   * heading pass it; without one the oldest matching row is returned.
+   */
+  async getCategoryBySlug(slug: string, navigationSlug?: string): Promise<Category | null> {
+    return findCategory(this.categoryRepository, slug, navigationSlug, [
+      'navigation',
+      'children',
+      'parent',
+      'products',
+    ]);
   }
 
   async healthCheck(): Promise<{ status: string; timestamp: Date; services: any }> {

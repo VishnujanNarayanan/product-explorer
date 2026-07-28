@@ -9,10 +9,14 @@ CREATE TABLE IF NOT EXISTS navigation (
   last_scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- A collection as it appears under one heading. World of Books lists the same collection
+-- under several headings ("Trending Now" sits under both Fiction and Non-Fiction), so the
+-- identity is (navigation_id, slug) — see the unique index below. A globally unique slug
+-- collapsed those into one row and left the sidebar short of what the site shows.
 CREATE TABLE IF NOT EXISTS category (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
-  slug VARCHAR(255) UNIQUE NOT NULL,
+  slug VARCHAR(255) NOT NULL,
   product_count INTEGER DEFAULT 0,
   -- Listing checkpoint: last products.json page fetched, and whether the collection is done.
   last_page_scraped INTEGER DEFAULT 0,
@@ -22,15 +26,18 @@ CREATE TABLE IF NOT EXISTS category (
   parent_id INTEGER REFERENCES category(id)
 );
 
+-- A product as it appears in one category. source_id is unique per category rather than
+-- globally: two category rows can point at the same collection, and a global constraint
+-- would let the second scrape move every product off the first and leave it empty.
 CREATE TABLE IF NOT EXISTS product (
   id SERIAL PRIMARY KEY,
-  source_id VARCHAR(255) UNIQUE NOT NULL,
+  source_id VARCHAR(255) NOT NULL,
   title TEXT NOT NULL,
   author VARCHAR(255),
   price DECIMAL(10, 2),
   currency VARCHAR(10) DEFAULT 'GBP',
   image_url TEXT,
-  source_url TEXT UNIQUE NOT NULL,
+  source_url TEXT NOT NULL,
   last_scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   category_id INTEGER REFERENCES category(id)
 );
@@ -88,9 +95,30 @@ CREATE TABLE IF NOT EXISTS scraper_session (
   stats JSONB DEFAULT '{"total_products_scraped": 0, "load_more_count": 0}'::jsonb
 );
 
--- ========== INDEXES ==========
-DO $$ 
+-- ========== CONSTRAINT MIGRATION ==========
+-- This file is also applied by hand to databases created before categories were keyed by
+-- (navigation_id, slug). Dropping the old table-level UNIQUE constraints is idempotent and
+-- a no-op on a database created from the definitions above.
+DO $$
 BEGIN
+  ALTER TABLE category DROP CONSTRAINT IF EXISTS category_slug_key;
+  ALTER TABLE product DROP CONSTRAINT IF EXISTS product_source_id_key;
+  ALTER TABLE product DROP CONSTRAINT IF EXISTS product_source_url_key;
+END $$;
+
+-- ========== INDEXES ==========
+DO $$
+BEGIN
+  -- Identity constraints. A slug names a category only within a heading, and a source_id
+  -- names a product only within a category.
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_category_navigation_slug') THEN
+    CREATE UNIQUE INDEX uq_category_navigation_slug ON category(navigation_id, slug);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_product_category_source_id') THEN
+    CREATE UNIQUE INDEX uq_product_category_source_id ON product(category_id, source_id);
+  END IF;
+
   -- Product indexes
   IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_product_source_id') THEN
     CREATE INDEX idx_product_source_id ON product(source_id);

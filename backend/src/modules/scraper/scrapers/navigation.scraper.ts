@@ -129,9 +129,14 @@ export class NavigationScraper extends BaseScraper {
 
           for (const child of group.children) {
             const catSlug = this.extractSlugFromUrl(child.href);
-            // A collection can be listed under more than one group; first occurrence wins.
-            if (!catSlug || seenCat.has(catSlug)) continue;
-            seenCat.add(catSlug);
+            // Deduplicate within a heading only. A collection listed under two headings
+            // ("Trending Now" appears under both Fiction and Non-Fiction) is two entries on
+            // the site and must stay two entries here — deduplicating globally dropped the
+            // second occurrence and left the sidebar short of what the menu shows.
+            if (!catSlug) continue;
+            const catKey = `${navSlug}|${catSlug}`;
+            if (seenCat.has(catKey)) continue;
+            seenCat.add(catKey);
 
             categories.push({
               title: child.title,

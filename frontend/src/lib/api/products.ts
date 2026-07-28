@@ -21,20 +21,36 @@ export interface ProductsResponse extends PaginationMeta {
   products: Product[];
 }
 
-/** Build a `?page=&limit=` string, omitting either value when it is not supplied. */
-function pageQuery(page?: number, limit?: number): string {
+/**
+ * Build a `?page=&limit=&navigation=` string, omitting values that are not supplied.
+ *
+ * `navigation` matters because a category slug is unique per heading, not globally: the
+ * same collection is listed under two headings and each keeps its own products.
+ */
+function categoryQuery(page?: number, limit?: number, navigation?: string): string {
   const params = new URLSearchParams();
   if (page !== undefined) params.set('page', String(page));
   if (limit !== undefined) params.set('limit', String(limit));
+  if (navigation) params.set('navigation', navigation);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
+/** Build a `?page=&limit=` string, omitting either value when it is not supplied. */
+function pageQuery(page?: number, limit?: number): string {
+  return categoryQuery(page, limit);
+}
+
 export const productsAPI = {
   // Get category products (triggers scrape if needed) - uses same endpoint as navigationAPI
-  getProductsByCategory: (categorySlug: string, page?: number, limit?: number) =>
+  getProductsByCategory: (
+    categorySlug: string,
+    page?: number,
+    limit?: number,
+    navigationSlug?: string,
+  ) =>
     api.get<CategoryProductsResponse>(
-      `/categories/${categorySlug}/products${pageQuery(page, limit)}`,
+      `/categories/${categorySlug}/products${categoryQuery(page, limit, navigationSlug)}`,
     ),
 
   // Get all products. The endpoint is paged, so this returns an envelope, not a bare array.

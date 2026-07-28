@@ -76,14 +76,26 @@ describe('CoreController', () => {
   describe('GET /categories/:slug', () => {
     // This used to answer 200 with an empty body, which reads as "exists but is blank".
     it('answers 404 for a slug that does not exist', async () => {
-      await expect(controller.getCategory({ slug: 'no-such-category' })).rejects.toThrow(
+      await expect(controller.getCategory({ slug: 'no-such-category' }, {})).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('returns the category when it exists', async () => {
       (coreService.getCategoryBySlug as jest.Mock).mockResolvedValue({ id: 11, slug: 'fantasy' });
-      await expect(controller.getCategory({ slug: 'fantasy' })).resolves.toMatchObject({ id: 11 });
+      await expect(controller.getCategory({ slug: 'fantasy' }, {})).resolves.toMatchObject({
+        id: 11,
+      });
+    });
+
+    // The same slug is listed under several headings, so the heading has to reach the service.
+    it('scopes the lookup to the navigation heading when one is given', async () => {
+      (coreService.getCategoryBySlug as jest.Mock).mockResolvedValue({ id: 12, slug: 'trending-now' });
+      await controller.getCategory({ slug: 'trending-now' }, { navigation: 'non-fiction-books' });
+      expect(coreService.getCategoryBySlug).toHaveBeenCalledWith(
+        'trending-now',
+        'non-fiction-books',
+      );
     });
   });
 
@@ -93,6 +105,7 @@ describe('CoreController', () => {
       expect(scraperService.scrapeCategoryBySlug).toHaveBeenCalledWith('fantasy-fiction-books', {
         page: 2,
         limit: 10,
+        navigationSlug: undefined,
       });
     });
 
@@ -101,6 +114,20 @@ describe('CoreController', () => {
       expect(scraperService.scrapeCategoryBySlug).toHaveBeenCalledWith('fantasy-fiction-books', {
         page: 1,
         limit: 24,
+        navigationSlug: undefined,
+      });
+    });
+
+    // Two headings can list the same collection, each with its own products.
+    it('passes the navigation heading through when the query carries one', async () => {
+      await controller.getCategoryProducts(
+        { slug: 'trending-now' },
+        { navigation: 'fiction-books' },
+      );
+      expect(scraperService.scrapeCategoryBySlug).toHaveBeenCalledWith('trending-now', {
+        page: 1,
+        limit: 24,
+        navigationSlug: 'fiction-books',
       });
     });
 
