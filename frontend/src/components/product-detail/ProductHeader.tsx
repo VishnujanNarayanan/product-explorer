@@ -43,22 +43,27 @@ export function ProductHeader({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Product Image */}
-        <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        {/*
+          Product image. No fixed aspect ratio: a cover is whatever shape the publisher
+          printed, and forcing a square meant object-cover cropped the author's name off
+          the bottom of every tall paperback. width/height of 0 with `sizes` is the Next.js
+          way of saying "I do not know the dimensions" — the browser applies the file's own
+          ratio once it loads, so each book keeps its true shape.
+        */}
+        <div className="relative mx-auto w-full max-w-sm self-start rounded-lg border bg-white p-6 lg:mx-0">
           {product.image_url ? (
             <Image
               src={product.image_url}
               alt={product.title}
-              fill
-              className="object-cover"
+              width={0}
+              height={0}
+              sizes="(max-width: 1024px) 90vw, 40vw"
+              className="h-auto w-full"
               priority
-              sizes="(max-width: 768px) 100vw, 50vw"
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-6xl">
-              📚
-            </div>
+            <div className="flex aspect-[3/4] items-center justify-center text-6xl">📚</div>
           )}
           {onRefresh && (
             <div className="absolute right-2 top-2">
@@ -67,6 +72,7 @@ export function ProductHeader({
                 size="icon"
                 onClick={onRefresh}
                 disabled={isRefreshing}
+                aria-label="Refresh this book's data"
                 className="h-9 w-9 bg-background/80 backdrop-blur-sm"
               >
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
