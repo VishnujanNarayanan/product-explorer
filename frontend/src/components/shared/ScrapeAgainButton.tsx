@@ -105,17 +105,17 @@ export function ScrapeAgainButton({
         {isScraping ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Scraping...
+            Scraping…
           </>
         ) : lastScraped ? (
           <>
             <RefreshCw className="h-4 w-4" />
-            Scrape Again
+            Scrape again
           </>
         ) : (
           <>
             <Sparkles className="h-4 w-4" />
-            Scrape Fresh Data
+            Scrape this category
           </>
         )}
       </Button>

@@ -143,14 +143,20 @@ export class CoreController {
     summary: 'Products across every category',
     description:
       'Reads stored products only — nothing here queues a scrape, so a listing page costs ' +
-      'the origin nothing. Pass `random=true` for a sample of products that have a cover, ' +
-      'which is what the home shelf shows.',
+      'the origin nothing. Pass `category=` to narrow it to one collection, or ' +
+      '`random=true` for a sample of products that have a cover, which is what the home ' +
+      'shelf shows.',
   })
   @ApiOkResponse({ type: PaginatedProductsDto })
   @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid page, limit or random' })
   async getProducts(@Query() query: ListProductsQueryDto) {
     try {
-      return await this.coreService.getProducts(query.page, query.limit, query.random ?? false);
+      return await this.coreService.getProducts(
+        query.page,
+        query.limit,
+        query.random ?? false,
+        query.category,
+      );
     } catch (error) {
       this.logger.error(`Products error: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Failed to load products');

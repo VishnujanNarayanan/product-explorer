@@ -181,7 +181,7 @@ cd backend && npm run openapi:export
 | `GET` | `/api/categories` | `navigation` | All categories, optionally one heading's |
 | `GET` | `/api/categories/:slug` | `navigation` | One category |
 | `GET` | `/api/categories/:slug/products` | `navigation`, `page`, `limit` | Products in a category |
-| `GET` | `/api/products` | `category`, `page`, `limit` | Paged product listing |
+| `GET` | `/api/products` | `category`, `random`, `page`, `limit` | Paged product listing, read from storage only. `random=true` samples books that have a cover — what the home shelf shows |
 | `GET` | `/api/products/:sourceId` | `refresh` | Product with detail, scraping on demand |
 | `POST` | `/api/scrape/navigation` | | Re-scrape navigation |
 | `POST` | `/api/scrape/category/:slug` | `navigation`, `page`, `limit` | Queue a listing scrape (returns immediately) |

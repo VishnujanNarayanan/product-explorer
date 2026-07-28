@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { ArrowRight } from "lucide-react"
 import { Navigation } from "@/lib/types"
 import { WebSocketStatus } from "@/components/shared/WebSocketStatus"
@@ -58,8 +58,6 @@ export function CategoryBar({ navigation }: CategoryBarProps) {
 
   if (navigation.length === 0) return null
 
-  const openSection = navigation.find((item) => item.slug === openSlug)
-
   return (
     <div
       ref={barRef}
@@ -77,28 +75,43 @@ export function CategoryBar({ navigation }: CategoryBarProps) {
             {navigation.map((section) => {
               const isOpen = openSlug === section.slug
               return (
-                <Link
-                  key={section.id}
-                  href={`/categories?navigation=${section.slug}`}
-                  aria-expanded={isOpen}
-                  aria-haspopup="true"
-                  onMouseEnter={() => open(section.slug)}
-                  onFocus={() => open(section.slug)}
-                  onClick={() => setOpenSlug(null)}
-                  className={`relative flex items-center px-4 py-3.5 text-sm font-medium transition-colors ${
-                    isOpen
-                      ? "bg-brand-border/60 text-brand-foreground"
-                      : "text-brand-foreground/80 hover:text-brand-foreground"
-                  }`}
-                >
-                  {section.title}
-                  <span
-                    aria-hidden
-                    className={`absolute inset-x-3 bottom-0 h-0.5 bg-highlight transition-opacity ${
-                      isOpen ? "opacity-100" : "opacity-0"
+                <Fragment key={section.id}>
+                  <Link
+                    href={`/categories?navigation=${section.slug}`}
+                    aria-expanded={isOpen}
+                    aria-haspopup="true"
+                    onMouseEnter={() => open(section.slug)}
+                    onFocus={() => open(section.slug)}
+                    onClick={() => setOpenSlug(null)}
+                    className={`relative flex items-center px-4 py-3.5 text-sm font-medium transition-colors ${
+                      isOpen
+                        ? "bg-brand-border/60 text-brand-foreground"
+                        : "text-brand-foreground/80 hover:text-brand-foreground"
                     }`}
-                  />
-                </Link>
+                  >
+                    {section.title}
+                    <span
+                      aria-hidden
+                      className={`absolute inset-x-3 bottom-0 h-0.5 bg-highlight transition-opacity ${
+                        isOpen ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                  </Link>
+
+                  {/* Rendered next to its own heading rather than after the whole bar, so
+                      Tab from a heading walks into that heading's categories. */}
+                  {isOpen && (
+                    <div
+                      className="absolute inset-x-0 top-full z-50 animate-panel-in border-b border-border bg-popover text-left text-popover-foreground shadow-panel"
+                      onMouseEnter={cancelClose}
+                      onMouseLeave={scheduleClose}
+                    >
+                      {/* The one ochre edge on the page — it marks the drawer that just opened. */}
+                      <div aria-hidden className="h-0.5 w-full bg-highlight" />
+                      <MegaPanel section={section} onNavigate={() => setOpenSlug(null)} />
+                    </div>
+                  )}
+                </Fragment>
               )
             })}
           </nav>
@@ -109,17 +122,6 @@ export function CategoryBar({ navigation }: CategoryBarProps) {
         </div>
       </div>
 
-      {openSection && (
-        <div
-          className="absolute inset-x-0 top-full z-50 animate-panel-in border-b border-border bg-popover text-popover-foreground shadow-panel"
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-        >
-          {/* The one ochre edge on the page — it marks the drawer that just opened. */}
-          <div aria-hidden className="h-0.5 w-full bg-highlight" />
-          <MegaPanel section={openSection} onNavigate={() => setOpenSlug(null)} />
-        </div>
-      )}
     </div>
   )
 }

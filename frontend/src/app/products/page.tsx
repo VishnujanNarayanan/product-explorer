@@ -378,6 +378,23 @@ function ProductsPageContent() {
       ? `Attempt ${wsAttempt} of ${wsMaxAttempts}`
       : null
 
+  // Kept mounted while the fetch runs — a control that disappears the moment you press it
+  // makes the page jump and leaves you unsure the press registered. handleLoadMore is the
+  // one that insists the session is ready.
+  const canLoadMore = isWsConnected && wsHasMore && displayProducts.length > 0
+  const isLoadingMore = isWsLoading || (isWsConnected && scraperStatus === 'scraping')
+
+  // One report, rendered at both ends of the grid.
+  const bannerProps = {
+    title: isWsLoading
+      ? 'Fetching the next page of books'
+      : wsSource === 'stored'
+        ? 'Showing stored books while the scrape continues'
+        : 'Still fetching more books',
+    line: progressLine,
+    retryLine,
+  }
+
   return (
     <div className="container space-y-8 py-8">
       <Breadcrumb items={breadcrumbItems} />
@@ -426,7 +443,16 @@ function ProductsPageContent() {
                   </span>
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
+                {/* Load more is offered at both ends of the grid: after forty covers the
+                    bottom control is a long scroll away from where you started reading. */}
+                {canLoadMore && (
+                  <LoadMoreButton
+                    onClick={handleLoadMore}
+                    isLoading={isLoadingMore}
+                    variant="outline"
+                  />
+                )}
                 {isWsConnected ? (
                   <ScrapeAgainButton
                     categorySlug={categorySlug}
@@ -517,26 +543,9 @@ function ProductsPageContent() {
             </div>
           )}
 
-          {/* Still working, with products already on screen. Says plainly that more is
+          {/* Still working, with books already on screen. Says plainly that more is
               coming, so a fallback to stored data does not read as a dead end. */}
-          {isWorkingInBackground && (
-            <div className="mb-6 flex items-start gap-3 rounded-lg border-l-2 border-l-highlight bg-secondary/60 p-4">
-              <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-highlight" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  {wsSource === 'stored'
-                    ? 'Showing stored books while the scrape continues'
-                    : 'Still fetching more books'}
-                </p>
-                <p className="text-sm text-muted-foreground">{progressLine}</p>
-                {retryLine && (
-                  <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
-                    {retryLine}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+          {isWorkingInBackground && <WorkingBanner {...bannerProps} className="mb-6" />}
 
           {/* Products Grid */}
           {showProducts && (
@@ -545,28 +554,19 @@ function ProductsPageContent() {
                 products={displayProducts}
                 isLoading={false}
               />
-              
-              {/* Show Load More at bottom too */}
-              {isWsConnected && scraperStatus === 'ready' && wsHasMore && displayProducts.length > 0 && (
-                <div className="flex justify-center pt-8">
-                  <Button
+
+              {/* The same report again at the foot of the grid. Load more lives down here,
+                  so this is where its progress has to appear — reporting it only at the top
+                  of a page of forty covers tells you nothing about the button you pressed. */}
+              {isWorkingInBackground && <WorkingBanner {...bannerProps} />}
+
+              {canLoadMore && (
+                <div className="flex justify-center pt-2">
+                  <LoadMoreButton
                     onClick={handleLoadMore}
-                    disabled={isWsLoading}
+                    isLoading={isLoadingMore}
                     size="lg"
-                    className="gap-2"
-                  >
-                    {isWsLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading More...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4" />
-                        Load More Products
-                      </>
-                    )}
-                  </Button>
+                  />
                 </div>
               )}
             </div>
@@ -574,6 +574,68 @@ function ProductsPageContent() {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * What the scraper is doing, in the same words wherever it appears. Rendered above and
+ * below the grid so the report is never off-screen from the control that started it.
+ */
+function WorkingBanner({
+  title,
+  line,
+  retryLine,
+  className,
+}: {
+  title: string
+  line: string
+  retryLine: string | null
+  className?: string
+}) {
+  return (
+    <div
+      aria-live="polite"
+      className={`flex items-start gap-3 rounded-lg border-l-2 border-l-highlight bg-secondary/60 p-4 ${className || ''}`}
+    >
+      <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-highlight" />
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{line}</p>
+        {retryLine && (
+          <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
+            {retryLine}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LoadMoreButton({
+  onClick,
+  isLoading,
+  size,
+  variant,
+}: {
+  onClick: () => void
+  isLoading: boolean
+  size?: "default" | "lg"
+  variant?: "default" | "outline"
+}) {
+  return (
+    <Button onClick={onClick} disabled={isLoading} size={size} variant={variant} className="gap-2">
+      {isLoading ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading more books…
+        </>
+      ) : (
+        <>
+          <RefreshCw className="h-4 w-4" />
+          Load more books
+        </>
+      )}
+    </Button>
   )
 }
 
