@@ -83,10 +83,13 @@ export class CoreService {
       .leftJoinAndSelect('product.category', 'category');
 
     if (random) {
+      // `limit`, not `take`: `take` paginates through a DISTINCT subquery, and Postgres
+      // rejects an ORDER BY RANDOM() that is not in the select list. The join is
+      // many-to-one, so no row multiplication makes DISTINCT necessary here anyway.
       const products = await query
         .where("product.image_url <> ''")
         .orderBy('RANDOM()')
-        .take(limit)
+        .limit(limit)
         .getMany();
 
       const total = await this.productRepository.count();
