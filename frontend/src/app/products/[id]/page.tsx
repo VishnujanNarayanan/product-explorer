@@ -98,7 +98,9 @@ export default function ProductDetailPage() {
         />
 
         <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-8">
+          {/* min-w-0: a grid item defaults to min-width:auto, so one long unbreakable
+              word in a scraped description stretches the column past the viewport. */}
+          <div className="lg:col-span-2 space-y-8 min-w-0">
             <ProductDescription product={product} />
             {product.detail && (
               <ProductReviews
@@ -109,7 +111,7 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <RelatedProducts productId={sourceId} />
           </div>
         </div>

@@ -19,7 +19,7 @@ export function ProductDescription({ product }: ProductDescriptionProps) {
         <CardContent>
           <div className="prose max-w-none dark:prose-invert">
             {description.split('\n').map((paragraph, index) => (
-              <p key={index} className="mb-4 last:mb-0">
+              <p key={index} className="mb-4 break-words last:mb-0">
                 {paragraph}
               </p>
             ))}
@@ -36,11 +36,11 @@ export function ProductDescription({ product }: ProductDescriptionProps) {
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2">
               {Object.entries(specs).map(([key, value]) => (
-                <div key={key} className="space-y-1">
-                  <div className="text-sm font-medium capitalize">
+                <div key={key} className="min-w-0 space-y-1">
+                  <div className="break-words text-sm font-medium capitalize">
                     {key.replace(/_/g, ' ')}
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="break-words text-sm text-muted-foreground">
                     {String(value) || 'Not specified'}
                   </div>
                 </div>
