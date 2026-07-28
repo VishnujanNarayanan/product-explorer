@@ -2,152 +2,157 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Home, BookOpen, ShoppingBag, User, LayoutGrid } from "lucide-react"
+import { ChevronDown, Menu, X } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { SearchBar } from "../shared/SearchBar"
 import { ThemeToggle } from "../shared/ThemeToggle"
-import { useState } from "react"
+import { CategoryBar } from "./CategoryBar"
+
+const utilityLinks = [
+  { href: "/", label: "Home" },
+  { href: "/history", label: "History" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" },
+]
 
 export function Header() {
   const pathname = usePathname()
   const { navigation } = useNavigation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [openSection, setOpenSection] = useState<string | null>(null)
 
-  const navItems = [
-    { href: "/", label: "Home", icon: Home },
-    { href: "/products", label: "Products", icon: ShoppingBag },
-    { href: "/categories", label: "Categories", icon: LayoutGrid }, // Changed from Grid3X3 to LayoutGrid
-    { href: "/about", label: "About", icon: BookOpen },
-    { href: "/contact", label: "Contact", icon: User },
-  ]
+  // A route change means the menu did its job.
+  useEffect(() => {
+    setMobileMenuOpen(false)
+    setOpenSection(null)
+  }, [pathname])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold hidden sm:inline">World of Books</span>
-            <span className="text-xl font-bold sm:hidden">WOB</span>
-          </Link>
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      {/* Utility row: who we are, what you can search, how you see it. */}
+      <div className="container flex h-16 items-center gap-6">
+        <Link href="/" className="flex items-center gap-3" aria-label="World of Books Explorer, home">
+          <span aria-hidden className="h-8 w-1.5 rounded-full bg-brand dark:bg-primary" />
+          <span className="leading-none">
+            <span className="block font-display text-lg font-semibold tracking-tight">
+              World of Books
+            </span>
+            <span className="mt-1 block font-mono text-[0.625rem] uppercase tracking-[0.22em] text-muted-foreground">
+              Explorer
+            </span>
+          </span>
+        </Link>
+
+        <div className="ml-auto hidden flex-1 justify-end md:flex">
+          <SearchBar />
         </div>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary ${
-                  pathname === item.href
-                    ? "text-primary"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            )
-          })}
-          
-          {/* Navigation Dropdown */}
-          {navigation.length > 0 && (
-            <div className="relative group">
-              <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                Browse <span className="hidden lg:inline">Categories</span>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </Button>
-              <div className="absolute top-full left-0 mt-2 w-48 rounded-md border bg-popover p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                {navigation.slice(0, 6).map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/categories?navigation=${item.slug}`}
-                    className="block rounded px-3 py-2 text-sm hover:bg-accent transition-colors"
-                  >
-                    {item.title}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+        <nav className="hidden items-center gap-5 xl:flex" aria-label="Site">
+          {utilityLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`text-sm transition-colors hover:text-foreground ${
+                pathname === link.href ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
-        {/* Right side */}
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="hidden md:block">
-            <SearchBar />
-          </div>
-
-          {/* Theme Toggle */}
+        <div className="ml-auto flex items-center gap-1 md:ml-0">
           <ThemeToggle />
-
-          {/* Mobile Menu */}
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
-            aria-label="Open menu"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((open) => !open)}
           >
-            <Menu className="h-5 w-5" />
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
       </div>
 
-      {/* Mobile Search */}
-      <div className="container pb-4 md:hidden">
-        <SearchBar />
-      </div>
+      <CategoryBar navigation={navigation} />
 
-      {/* Mobile Menu */}
+      {/* Mobile: search plus the same sections, opened one at a time. */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t">
-          <div className="container py-4">
-            <div className="space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon
+        <div className="border-t border-border bg-background lg:hidden">
+          <div className="container space-y-4 py-4">
+            <div className="md:hidden">
+              <SearchBar />
+            </div>
+
+            <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Site">
+              {utilityLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm ${
+                    pathname === link.href ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="divide-y divide-border border-y border-border">
+              {navigation.map((section) => {
+                const isOpen = openSection === section.slug
+                const categories = section.categories ?? []
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      pathname === item.href
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
+                  <div key={section.id}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenSection(isOpen ? null : section.slug)}
+                      aria-expanded={isOpen}
+                      className="flex w-full items-center justify-between py-3 text-left text-sm font-medium"
+                    >
+                      {section.title}
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-[0.6875rem] text-muted-foreground">
+                          {categories.length}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${
+                            isOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="pb-3">
+                        {categories.map((category) => (
+                          <Link
+                            key={`${section.slug}-${category.id}`}
+                            href={`/products?category=${category.slug}&navigation=${section.slug}`}
+                            className="flex items-baseline justify-between gap-3 border-l-2 border-transparent py-2 pl-3 text-sm text-muted-foreground hover:border-highlight hover:text-foreground"
+                          >
+                            <span className="truncate">{category.title}</span>
+                            {category.product_count > 0 && (
+                              <span className="font-mono text-[0.6875rem] text-highlight">
+                                {category.product_count}
+                              </span>
+                            )}
+                          </Link>
+                        ))}
+                        <Link
+                          href={`/categories?navigation=${section.slug}`}
+                          className="mt-1 inline-block pl-3 text-sm font-medium text-primary"
+                        >
+                          Browse the whole section
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
-              
-              {/* Mobile Navigation Links */}
-              {navigation.length > 0 && (
-                <div className="pt-2 border-t mt-2">
-                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Browse Categories
-                  </div>
-                  {navigation.slice(0, 8).map((item) => (
-                    <Link
-                      key={item.id}
-                      href={`/categories?navigation=${item.slug}`}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-accent transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {item.title}
-                    </Link>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>

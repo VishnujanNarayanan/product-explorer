@@ -57,7 +57,7 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="container space-y-8 py-10">
       <div className="space-y-4">
         <h1 className="text-4xl font-bold">Contact Us</h1>
         <p className="text-lg text-muted-foreground">

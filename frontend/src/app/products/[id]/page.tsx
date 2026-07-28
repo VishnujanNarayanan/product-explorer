@@ -88,7 +88,7 @@ export default function ProductDetailPage() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-8">
+      <div className="container space-y-8 py-10">
         <Breadcrumb items={breadcrumbItems} />
 
         <ProductHeader
