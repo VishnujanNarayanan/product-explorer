@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // There is a second lockfile above this directory, and Next picks the outer one as the
+  // workspace root. That moves the root away from where Tailwind's content globs and the
+  // PostCSS config live, so newly written utility classes never get generated.
+  turbopack: {
+    root: __dirname,
+  },
   // Emits .next/standalone: a self-contained server with only the node_modules it actually
   // needs, so the runtime image does not have to carry a full dependency tree.
   output: 'standalone',

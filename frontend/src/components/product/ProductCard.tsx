@@ -2,11 +2,9 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Star, RefreshCw, ArrowRight, ImageOff } from "lucide-react"
-import { Card, CardContent, CardFooter } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
+import { RefreshCw, ImageOff } from "lucide-react"
 import { Product } from "@/lib/types"
-import { cn, getRatingStars } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { useToast } from "@/lib/hooks/useToast"
 import { productsAPI } from "@/lib/api/products"
@@ -26,13 +24,11 @@ export function ProductCard({
 }: ProductCardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { toast } = useToast()
-  const rating = product.detail?.ratings_avg || 0
-  const { full, half, empty } = getRatingStars(rating)
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     setIsRefreshing(true)
     try {
       const result = await productsAPI.scrapeProduct(product.source_id, true)
@@ -53,103 +49,70 @@ export function ProductCard({
   }
 
   return (
-    <Card className={cn("overflow-hidden hover:shadow-xl transition-all hover:border-primary/50 group", className)}>
-      <Link href={`/products/${product.source_id}`} className="block">
-        <div className="relative aspect-square overflow-hidden bg-muted">
-          {product.image_url ? (
-            <Image
-              src={product.image_url}
-              alt={product.title}
-              fill
-              className="object-cover transition-transform group-hover:scale-110 duration-300"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-              onError={(e) => {
-                // Fallback on image load error
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-          ) : null}
-          {!product.image_url && (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-muted">
-              <div className="flex flex-col items-center gap-2 opacity-60">
-                <ImageOff className="h-8 w-8" />
-                <span className="text-xs text-muted-foreground text-center px-4">
-                  No image available
-                </span>
-              </div>
-            </div>
-          )}
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="absolute top-2 right-2 bg-background/90 backdrop-blur-md rounded-full p-2 hover:bg-background transition-all z-10 shadow-lg opacity-0 group-hover:opacity-100"
-            aria-label="Refresh product data"
-            title="Refresh product data"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </Link>
-      <CardContent className="p-4">
-        <Link href={`/products/${product.source_id}`} className="block group/title">
-          <h3 className="font-semibold line-clamp-2 group-hover/title:text-primary transition-colors text-sm">
-            {product.title}
-          </h3>
-        </Link>
-        {/* The assignment lists author among the required product-tile fields. */}
-        {product.author && (
-          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-            by {product.author}
-          </p>
-        )}
-        {showCategory && product.category && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            in {product.category.title}
-          </p>
-        )}
-        
-        {/* Rating */}
-        {rating > 0 && (
-          <div className="mt-2 flex items-center gap-1">
-            <div className="flex gap-0.5">
-              {Array(full).fill(0).map((_, i) => (
-                <Star key={`full-${i}`} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-              ))}
-              {half > 0 && (
-                <div className="relative h-3 w-3">
-                  <Star className="h-3 w-3 text-yellow-400" />
-                  <div className="absolute top-0 left-0 overflow-hidden w-1.5 h-3">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  </div>
-                </div>
-              )}
-              {Array(empty).fill(0).map((_, i) => (
-                <Star key={`empty-${i}`} className="h-3 w-3 text-muted-foreground/30" />
-              ))}
-            </div>
-            <span className="text-xs text-muted-foreground ml-1">
-              {rating.toFixed(1)}
-            </span>
+    // The title link is stretched over the whole tile, so the card is one target without
+    // nesting a button inside an anchor.
+    <article
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-colors hover:border-foreground/25",
+        className,
+      )}
+    >
+      <div className="relative aspect-[3/4] bg-white p-4 dark:bg-secondary">
+        {product.image_url ? (
+          <Image
+            src={product.image_url}
+            alt={product.title}
+            fill
+            // Covers arrive at whatever proportion the publisher printed. Contain keeps
+            // every one whole rather than cropping the title off a tall paperback.
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.03]"
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 16vw"
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <ImageOff className="h-6 w-6" />
+            <span className="px-4 text-center text-xs">No image available</span>
           </div>
         )}
 
-        {/* Price */}
-        {product.price && (
-          <div className="mt-3 pt-3 border-t">
-            <p className="font-bold text-lg text-primary">
-              £{product.price}
-            </p>
-          </div>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="absolute right-2 top-2 z-20 rounded-full border bg-background/90 p-2 opacity-0 shadow-rise backdrop-blur transition-opacity hover:bg-background focus-visible:opacity-100 group-hover:opacity-100"
+          aria-label="Refresh product data"
+          title="Refresh product data"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col border-t p-4">
+        <h3 className="text-sm font-medium leading-snug">
+          <Link
+            href={`/products/${product.source_id}`}
+            className="line-clamp-2 after:absolute after:inset-0 hover:underline"
+          >
+            {product.title}
+          </Link>
+        </h3>
+
+        {/* The assignment lists author among the required product-tile fields. */}
+        {product.author && (
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">by {product.author}</p>
         )}
-      </CardContent>
-      <CardFooter className="p-4 pt-0">
-        <Link href={`/products/${product.source_id}`} className="w-full">
-          <Button variant="outline" className="w-full group/btn">
-            View Details
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-          </Button>
-        </Link>
-      </CardFooter>
-    </Card>
+
+        {showCategory && product.category && (
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+            in {product.category.title}
+          </p>
+        )}
+
+        {product.price && (
+          <p className="mt-auto pt-3 font-mono text-sm font-medium text-highlight">
+            £{product.price}
+          </p>
+        )}
+      </div>
+    </article>
   )
 }

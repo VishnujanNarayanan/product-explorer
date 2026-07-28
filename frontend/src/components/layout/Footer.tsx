@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BookOpen, Github, Twitter, Linkedin } from "lucide-react"
+import { Github, Twitter, Linkedin } from "lucide-react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -34,12 +34,20 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <BookOpen className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">World of Books</span>
+            {/* Same mark as the header, so the page opens and closes on the same note. */}
+            <Link href="/" className="flex items-center gap-3">
+              <span aria-hidden className="h-8 w-1.5 rounded-full bg-brand dark:bg-primary" />
+              <span className="leading-none">
+                <span className="block font-display text-lg font-semibold tracking-tight">
+                  World of Books
+                </span>
+                <span className="mt-1 block font-mono text-[0.625rem] uppercase tracking-[0.22em] text-muted-foreground">
+                  Explorer
+                </span>
+              </span>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Product exploration platform with real-time scraping.
+              A catalogue explorer that scrapes World of Books as you browse it.
             </p>
             <div className="flex gap-4">
               {socialLinks.map((link) => {

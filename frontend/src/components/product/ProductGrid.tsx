@@ -25,13 +25,14 @@ export function ProductGrid({
         {title && (
           <h2 className="text-2xl font-bold">{title}</h2>
         )}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="space-y-4">
-              <div className="aspect-square rounded-lg bg-muted animate-pulse" />
-              <div className="h-4 bg-muted rounded animate-pulse" />
-              <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
-              <div className="h-8 bg-muted rounded animate-pulse" />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-lg border">
+              <div className="skeleton aspect-[3/4] rounded-none" />
+              <div className="space-y-2 border-t p-4">
+                <div className="skeleton h-4" />
+                <div className="skeleton h-3 w-2/3" />
+              </div>
             </div>
           ))}
         </div>
@@ -50,9 +51,9 @@ export function ProductGrid({
   return (
     <div>
       {title && (
-        <h2 className="mb-6 text-2xl font-bold">{title}</h2>
+        <h2 className="mb-6 font-display text-2xl font-semibold">{title}</h2>
       )}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
