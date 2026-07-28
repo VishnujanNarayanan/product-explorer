@@ -8,7 +8,9 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      // Flat by default: the page is grey and cards are white, so the border carries the
+      // separation. Components opt into elevation where it means something.
+      "rounded-lg border bg-card text-card-foreground",
       className
     )}
     {...props}

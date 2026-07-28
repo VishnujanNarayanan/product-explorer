@@ -22,7 +22,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="container space-y-8 py-10">
       <div className="space-y-4">
         <h1 className="text-4xl font-bold">Browsing History</h1>
         <p className="text-lg text-muted-foreground">

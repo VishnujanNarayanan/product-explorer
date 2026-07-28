@@ -60,7 +60,7 @@ function CategoriesPageContent() {
 
   if (!navigationSlug) {
     return (
-      <div className="space-y-8">
+      <div className="container space-y-8 py-10">
         <div className="text-center py-16">
           <LayoutGrid className="h-16 w-16 mx-auto mb-6 text-muted-foreground opacity-50" />
           <h1 className="text-4xl font-bold mb-4">Select a Category Section</h1>
@@ -77,7 +77,7 @@ function CategoriesPageContent() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="container space-y-8 py-10">
       <Breadcrumb items={breadcrumbItems} />
 
       <div className="flex items-start gap-8">

@@ -50,6 +50,19 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // The nav band and anything printed on it.
+        brand: {
+          DEFAULT: 'hsl(var(--brand))',
+          foreground: 'hsl(var(--brand-foreground))',
+          muted: 'hsl(var(--brand-muted))',
+          border: 'hsl(var(--brand-border))',
+        },
+        // Reserved for data: prices, counts, the active marker.
+        highlight: {
+          DEFAULT: 'hsl(var(--highlight))',
+          foreground: 'hsl(var(--highlight-foreground))',
+          soft: 'hsl(var(--highlight-soft))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -77,6 +90,10 @@ module.exports = {
           from: { transform: 'translateX(-100%)' },
           to: { transform: 'translateX(0)' },
         },
+        'panel-in': {
+          from: { opacity: 0, transform: 'translateY(-6px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
         pulse: {
           '0%, 100%': { opacity: 1 },
           '50%': { opacity: 0.5 },
@@ -88,11 +105,19 @@ module.exports = {
         'fade-in': 'fade-in 0.5s ease-out',
         'fade-up': 'fade-up 0.5s ease-out',
         'slide-in': 'slide-in 0.3s ease-out',
+        'panel-in': 'panel-in 0.14s ease-out',
         pulse: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Poppins', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Georgia', 'serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+      },
+      boxShadow: {
+        // One shared elevation for panels that drop over the page, so the mega-menu,
+        // popovers and sticky rails all read as the same layer.
+        panel: '0 24px 48px -24px hsl(160 20% 8% / 0.35), 0 2px 6px -2px hsl(160 20% 8% / 0.12)',
+        rise: '0 12px 24px -16px hsl(160 20% 8% / 0.4)',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
