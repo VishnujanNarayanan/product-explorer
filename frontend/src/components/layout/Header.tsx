@@ -13,7 +13,6 @@ const utilityLinks = [
   { href: "/", label: "Home" },
   { href: "/history", label: "History" },
   { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
 ]
 
 export function Header() {
