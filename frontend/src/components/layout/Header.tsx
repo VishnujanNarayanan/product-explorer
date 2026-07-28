@@ -7,14 +7,12 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { SearchBar } from "../shared/SearchBar"
-import { ThemeToggle } from "../shared/ThemeToggle"
 import { CategoryBar } from "./CategoryBar"
 
 const utilityLinks = [
   { href: "/", label: "Home" },
   { href: "/history", label: "History" },
   { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
 ]
 
 export function Header() {
@@ -64,7 +62,6 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1 md:ml-0">
-          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"

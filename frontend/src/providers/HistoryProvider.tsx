@@ -1,83 +1,83 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ViewHistory } from '@/lib/types';
+import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
+
+/** What a viewed book leaves behind, so the list can be rebuilt without refetching. */
+export interface ViewedBook {
+  source_id: string;
+  title: string;
+  author: string | null;
+  price: number | null;
+  image_url: string;
+  category: string | null;
+  /** ISO string — sortable, and readable when you look at localStorage directly. */
+  viewed_at: string;
+}
 
 interface HistoryContextType {
-  viewHistory: ViewHistory[];
+  viewHistory: ViewedBook[];
   isLoading: boolean;
-  trackView: (path: string, data: any) => void;
+  trackView: (book: Omit<ViewedBook, 'viewed_at'>) => void;
   clearHistory: () => void;
 }
 
+const STORAGE_KEY = 'wob_view_history';
+const MAX_ENTRIES = 50;
+
 const HistoryContext = createContext<HistoryContextType | undefined>(undefined);
 
+/**
+ * Which books have been opened, kept in this browser.
+ *
+ * Deliberately local: there are no accounts, and the backend's view_history rows are keyed
+ * by a scraper session that does not outlive a restart. Re-opening a book moves it back to
+ * the top rather than adding a second row, so the page reads as "books you have looked at"
+ * rather than "clicks you have made".
+ */
 export function HistoryProvider({ children }: { children: ReactNode }) {
-  const [viewHistory, setViewHistory] = useState<ViewHistory[]>([]);
+  const [viewHistory, setViewHistory] = useState<ViewedBook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadHistory();
-  }, []);
-
-  const loadHistory = () => {
-    setIsLoading(true);
     try {
-      const historyStr = localStorage.getItem('wob_view_history');
-      if (historyStr) {
-        const historyData = JSON.parse(historyStr);
-        const sessionId = localStorage.getItem('wob_session_id') || 'local';
-        
-        const mappedHistory: ViewHistory[] = historyData.map((item: any, index: number) => ({
-          id: index,
-          session_id: sessionId,
-          path_json: item,
-          created_at: item.timestamp,
-          user_id: null
-        }));
-        
-        setViewHistory(mappedHistory);
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Entries written by the previous build had a different shape. Drop what cannot be
+        // read rather than rendering blank rows for it.
+        if (Array.isArray(parsed)) {
+          setViewHistory(parsed.filter((item) => item && item.source_id && item.title));
+        }
       }
     } catch (error) {
       console.error('Failed to load history:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const trackView = (path: string, data: any) => {
-    try {
-      const historyItem = {
-        path,
-        data,
-        timestamp: new Date().toISOString()
-      };
+  const trackView = useCallback((book: Omit<ViewedBook, 'viewed_at'>) => {
+    setViewHistory((previous) => {
+      const entry: ViewedBook = { ...book, viewed_at: new Date().toISOString() };
+      const next = [
+        entry,
+        ...previous.filter((item) => item.source_id !== book.source_id),
+      ].slice(0, MAX_ENTRIES);
 
-      const existing = JSON.parse(localStorage.getItem('wob_view_history') || '[]');
-      const newHistory = [historyItem, ...existing.slice(0, 49)];
-      
-      localStorage.setItem('wob_view_history', JSON.stringify(newHistory));
-      
-      const sessionId = localStorage.getItem('wob_session_id') || 'local';
-      setViewHistory(prev => [
-        {
-          id: Date.now(),
-          session_id: sessionId,
-          path_json: historyItem,
-          created_at: historyItem.timestamp,
-          user_id: null
-        },
-        ...prev.slice(0, 49)
-      ]);
-    } catch (error) {
-      console.error('Failed to track view:', error);
-    }
-  };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.error('Failed to save history:', error);
+      }
 
-  const clearHistory = () => {
-    localStorage.removeItem('wob_view_history');
+      return next;
+    });
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
     setViewHistory([]);
-  };
+  }, []);
 
   return (
     <HistoryContext.Provider value={{ viewHistory, isLoading, trackView, clearHistory }}>

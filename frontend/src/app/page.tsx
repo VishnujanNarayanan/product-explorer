@@ -12,7 +12,7 @@ import { useToast } from '@/lib/hooks/useToast'
 
 export default function Home() {
   const { navigation, isLoading: isLoadingNavigation, error, refreshNavigation } = useNavigation()
-  const { products, total, isLoading: isLoadingProducts, reshuffle } = useRandomProducts(10)
+  const { products, isLoading: isLoadingProducts, reshuffle } = useRandomProducts(10)
   const { toast } = useToast()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [hasAttemptedRefresh, setHasAttemptedRefresh] = useState(false)
@@ -53,7 +53,6 @@ export default function Home() {
     }
   }
 
-  const categoryCount = navigation.reduce((sum, nav) => sum + (nav.categories?.length || 0), 0)
   // The hero shelf and the grid draw from the same sample; the shelf takes the first few
   // covers so nothing is fetched twice.
   const shelf = products.slice(0, 5)
@@ -83,7 +82,7 @@ export default function Home() {
               )}
               <Button variant="outline" size="lg" onClick={reshuffle} disabled={isLoadingProducts}>
                 <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
-                Shuffle the shelf
+                Show me some books
               </Button>
             </div>
           </div>
@@ -94,27 +93,21 @@ export default function Home() {
             <Shelf products={shelf} isLoading={isLoadingProducts} />
           </div>
         </div>
-
-        {/* Honest counts, taken from what is actually stored. */}
-        <div className="border-t">
-          <dl className="container grid grid-cols-3 divide-x divide-border">
-            <Stat label="Books stored" value={total ? total.toLocaleString() : '—'} />
-            <Stat label="Sections" value={navigation.length || '—'} />
-            <Stat label="Categories" value={categoryCount || '—'} />
-          </dl>
-        </div>
       </section>
 
       {/* A random draw from storage — a different shelf on every arrival. */}
       <section className="container py-14">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
           <div>
-            <p className="label-meta">From the stockroom</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold">A random shelf</h2>
+            <p className="label-meta">From the catalogue</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold">Have a look at some books</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A different selection each time you arrive.
+            </p>
           </div>
           <Button variant="outline" onClick={reshuffle} disabled={isLoadingProducts}>
             <Shuffle className={`mr-2 h-4 w-4 ${isLoadingProducts ? 'animate-spin' : ''}`} />
-            Shuffle
+            Show me others
           </Button>
         </div>
 
@@ -136,7 +129,7 @@ export default function Home() {
 
         {!isLoadingProducts && products.length === 0 && (
           <div className="mt-8 rounded-lg border border-dashed p-12 text-center">
-            <p className="font-medium">No books stored yet</p>
+            <p className="font-medium">Nothing in the catalogue yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Open a category from the bar above — the first visit scrapes it.
             </p>
@@ -218,15 +211,6 @@ export default function Home() {
           )}
         </div>
       </section>
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="py-5 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
-      <dt className="label-meta">{label}</dt>
-      <dd className="mt-1 font-mono text-xl">{value}</dd>
     </div>
   )
 }

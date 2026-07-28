@@ -11,6 +11,7 @@ import { useToast } from "@/lib/hooks/useToast"
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
 import { productsAPI } from "@/lib/api/products"
+import { useHistory } from "@/lib/hooks/useHistory"
 import { useState, useEffect } from "react"
 
 export default function ProductDetailPage() {
@@ -20,10 +21,25 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
+  const { trackView } = useHistory()
+
   useEffect(() => {
     loadProduct()
   }, [sourceId])
+
+  // Opening a book is what puts it in your history. Recorded here rather than on the tile
+  // click, so a book only counts once you have actually looked at it.
+  useEffect(() => {
+    if (!product) return
+    trackView({
+      source_id: product.source_id,
+      title: product.title,
+      author: product.author ?? null,
+      price: product.price ?? null,
+      image_url: product.image_url ?? '',
+      category: product.category?.title ?? null,
+    })
+  }, [product, trackView])
 
   const loadProduct = async () => {
     setIsLoading(true)

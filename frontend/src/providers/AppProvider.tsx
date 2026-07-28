@@ -17,7 +17,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dedupingInterval: 2000,
       }}
     >
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <ThemeProvider attribute="class" forcedTheme="dark">
         <HistoryProvider>
           {children}
           <Toaster
