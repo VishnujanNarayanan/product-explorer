@@ -6,6 +6,7 @@ import { CategoryCard } from "@/components/category/CategoryCard"
 import { useCategories } from "@/lib/hooks/useCategories"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { Breadcrumb } from "@/components/shared/Breadcrumb"
+import { SideRail } from "@/components/layout/SideRail"
 import { navigationAPI } from "@/lib/api/navigation"
 import { useToast } from "@/lib/hooks/useToast"
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
@@ -80,118 +81,86 @@ function CategoriesPageContent() {
     <div className="container space-y-8 py-10">
       <Breadcrumb items={breadcrumbItems} />
 
-      <div className="flex items-start gap-8">
-        {/* Sidebar - Navigation Switcher */}
-        <div className="w-72 flex-shrink-0">
-          <div className="sticky top-8 rounded-xl border bg-gradient-to-b from-card to-card/80 backdrop-blur-sm shadow-lg p-6 space-y-4">
-            <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Browse Sections
-              </h3>
-            </div>
-            <div className="space-y-1.5">
-              {isLoadingNav ? (
-                <div className="flex justify-center py-6">
-                  <LoadingSpinner size="sm" />
-                </div>
-              ) : (
-                navigation.map((nav) => (
-                  <button
-                    key={nav.id}
-                    onClick={() => handleNavigationChange(nav.slug)}
-                    className={`w-full rounded-lg px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${
-                      navigationSlug === nav.slug
-                        ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md"
-                        : "text-foreground hover:bg-accent/50 border border-transparent"
-                    }`}
-                  >
-                    {nav.title}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col items-start gap-10 lg:flex-row">
+        <SideRail
+          label="Sections"
+          isLoading={isLoadingNav}
+          items={navigation.map((nav) => ({
+            id: nav.id,
+            title: nav.title,
+            count: nav.categories?.length,
+            isActive: navigationSlug === nav.slug,
+          }))}
+          onSelect={(item) => {
+            const nav = navigation.find((n) => n.id === item.id)
+            if (nav) handleNavigationChange(nav.slug)
+          }}
+        />
 
         {/* Main Content */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {/* Header */}
-          <div className="mb-12">
-            <div className="flex flex-col gap-6">
+          <div className="mb-10 border-b pb-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h1 className="text-5xl font-bold tracking-tight mb-3">{currentNav?.title}</h1>
-                <p className="text-lg text-muted-foreground max-w-2xl">
-                  Explore {categories.length > 0 ? categories.length : ''} categories in this section
+                <p className="label-meta">Section</p>
+                <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">
+                  {currentNav?.title}
+                </h1>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {categories.length > 0
+                    ? `${categories.length} categories · pick one to scrape its books`
+                    : 'No categories stored for this section yet'}
                 </p>
               </div>
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing || isLoadingCategories}
-                  size="lg"
-                  className="gap-2"
-                >
-                  {isRefreshing || isLoadingCategories ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Refreshing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-5 w-5" />
-                      Refresh Categories
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button
+                onClick={handleRefresh}
+                disabled={isRefreshing || isLoadingCategories}
+                variant="outline"
+                className="gap-2 self-start lg:self-auto"
+              >
+                {isRefreshing || isLoadingCategories ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Re-scrape categories
+              </Button>
             </div>
           </div>
 
           {/* Loading State */}
           {(isLoadingCategories || isRefreshing) && categories.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24">
-              <div className="rounded-full bg-primary/10 p-4 mb-4">
-                <LoadingSpinner size="lg" />
-              </div>
-              <p className="text-lg font-medium text-foreground">
-                Loading categories...
-              </p>
-              <p className="text-muted-foreground mt-2">
-                Scraping {currentNav?.title} from World of Books
-              </p>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="space-y-3 rounded-lg border p-5">
+                  <div className="skeleton h-5 w-2/3" />
+                  <div className="skeleton h-3 w-1/3" />
+                </div>
+              ))}
             </div>
           )}
 
           {/* Empty State */}
           {!isLoadingCategories && !isRefreshing && categories.length === 0 && (
-            <div className="rounded-xl border border-dashed bg-card/30 p-16 text-center">
-              <LayoutGrid className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-lg font-medium text-foreground mb-2">
-                No categories found
+            <div className="rounded-lg border border-dashed p-12 text-center">
+              <p className="font-medium">Nothing stored for this section</p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                Re-scraping asks World of Books for this section&apos;s categories again.
               </p>
-              <p className="text-muted-foreground mb-6">
-                Try refreshing to fetch the latest categories
-              </p>
-              <Button onClick={handleRefresh} size="lg">
+              <Button onClick={handleRefresh} className="mt-6" variant="outline">
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Categories
+                Re-scrape categories
               </Button>
             </div>
           )}
 
           {/* Categories Grid */}
           {!isLoadingCategories && !isRefreshing && categories.length > 0 && (
-            <div>
-              <div className="mb-6 flex items-center justify-between">
-                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  {categories.length} Categor{categories.length !== 1 ? 'ies' : 'y'}
-                </span>
-              </div>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {categories.map((category) => (
-                  <CategoryCard key={category.id} category={category} />
-                ))}
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {categories.map((category) => (
+                <CategoryCard key={category.id} category={category} />
+              ))}
             </div>
           )}
         </div>
