@@ -1,5 +1,5 @@
 import Image from "next/image"
-import { Star, Calendar, Tag, RefreshCw } from "lucide-react"
+import { Star, Calendar, Tag, RefreshCw, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Product } from "@/lib/types"
 import { formatPrice, getRatingStars, formatDate } from "@/lib/utils"
@@ -43,19 +43,6 @@ export function ProductHeader({
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>Home</span>
-        <span>/</span>
-        {product.category && (
-          <>
-            <span>{product.category.title}</span>
-            <span>/</span>
-          </>
-        )}
-        <span className="font-medium text-foreground">{product.title}</span>
-      </div>
-
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Product Image */}
         <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
@@ -102,7 +89,9 @@ export function ProductHeader({
             )}
           </div>
 
-          {/* Rating */}
+          {/* Rating — only when there is one. World of Books publishes none, so this is
+              normally absent rather than a row of empty stars reading "0.0 (0 reviews)". */}
+          {rating > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex">
               {Array(full).fill(0).map((_, i) => (
@@ -120,6 +109,7 @@ export function ProductHeader({
               ({reviewsCount} review{reviewsCount !== 1 ? 's' : ''})
             </span>
           </div>
+          )}
 
           {/* Price */}
           <div className="space-y-2">
@@ -134,9 +124,16 @@ export function ProductHeader({
 
           {/* Actions */}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button size="lg" className="flex-1">
-              Add to Cart
-            </Button>
+            {/* Nothing here is for sale — buying happens on World of Books, so the primary
+                action goes there rather than to a cart that never existed. */}
+            {product.source_url && (
+              <Button size="lg" className="flex-1 gap-2" asChild>
+                <a href={product.source_url} target="_blank" rel="noopener noreferrer">
+                  View on World of Books
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
             <Button 
               size="lg" 
               variant="outline" 
@@ -158,20 +155,6 @@ export function ProductHeader({
               </Button>
             )}
           </div>
-
-          {/* Source Link */}
-          {product.source_url && (
-            <div className="pt-4 border-t">
-              <a
-                href={product.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary hover:underline"
-              >
-                View on World of Books →
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </div>
