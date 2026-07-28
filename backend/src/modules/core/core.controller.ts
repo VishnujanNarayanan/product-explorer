@@ -37,6 +37,7 @@ import {
 import {
   CategoryProductsQueryDto,
   GetCategoriesQueryDto,
+  GetCategoryQueryDto,
   GetProductQueryDto,
   LegacyScrapeParamsDto,
   LegacyScrapeType,
@@ -96,13 +97,18 @@ export class CoreController {
   }
 
   @Get('categories/:slug')
-  @ApiOperation({ summary: 'One category, with its navigation, children and products' })
+  @ApiOperation({
+    summary: 'One category, with its navigation, children and products',
+    description:
+      'A slug is unique per navigation heading, not globally — pass `?navigation=` to pick ' +
+      'the right one when a collection is listed under several headings.',
+  })
   @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
   @ApiOkResponse({ type: Category })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No category with that slug' })
   @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Malformed slug' })
-  async getCategory(@Param() params: SlugParamDto) {
-    const category = await this.coreService.getCategoryBySlug(params.slug);
+  async getCategory(@Param() params: SlugParamDto, @Query() query: GetCategoryQueryDto) {
+    const category = await this.coreService.getCategoryBySlug(params.slug, query.navigation);
     if (!category) {
       throw new NotFoundException(`Category not found: ${params.slug}`);
     }
@@ -116,7 +122,8 @@ export class CoreController {
       'Returns stored products immediately and queues a background listing scrape for the ' +
       'next unfetched page. Once the collection is exhausted no further requests are made, ' +
       'so browsing a completed category costs the origin nothing. Responses are cached per ' +
-      'page for one hour; empty results are never cached.',
+      'page for one hour; empty results are never cached. Pass `?navigation=` to pick which ' +
+      'heading\'s copy of the collection to read — each keeps its own products and checkpoint.',
   })
   @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
   @ApiOkResponse({ type: CategoryProductsDto })
@@ -308,6 +315,7 @@ export class CoreController {
       return await this.scraperService.scrapeCategoryBySlug(slug, {
         page: query.page ?? 1,
         limit: query.limit ?? 24,
+        navigationSlug: query.navigation,
       });
     } catch (error) {
       // A deliberate 404 from the service must reach the client as a 404. Wrapping every

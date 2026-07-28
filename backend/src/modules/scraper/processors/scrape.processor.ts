@@ -117,9 +117,11 @@ export class ScrapeProcessor {
 
       for (const productData of result.products) {
         try {
-          // source_id is unique, so this doubles as deduplication across categories.
+          // Scoped to this category. source_id is unique per category, not globally, so a
+          // collection listed under two headings fills both instead of the second scrape
+          // moving every row off the first.
           const existingProduct = await this.productRepo.findOne({
-            where: { source_id: productData.source_id },
+            where: { source_id: productData.source_id, category: { id: category.id } },
           });
 
           if (existingProduct) {
@@ -277,8 +279,9 @@ export class ScrapeProcessor {
   /**
    * Upserts recommended products so the detail page has something to link to. These come from
    * Shopify's recommendations feed and may already exist from a listing scrape, so they are
-   * matched on the unique source_id. Existing rows are left alone apart from a price refresh —
-   * a recommendation payload is thinner than a listing row and must not overwrite good data.
+   * matched on source_id within the parent's category. Existing rows are left alone apart
+   * from a price refresh — a recommendation payload is thinner than a listing row and must
+   * not overwrite good data.
    */
   private async saveRelatedProducts(related: any[], parent: Product): Promise<number> {
     if (!Array.isArray(related) || related.length === 0) return 0;
@@ -289,7 +292,10 @@ export class ScrapeProcessor {
 
       try {
         const existing = await this.productRepo.findOne({
-          where: { source_id: rel.source_id },
+          where: parent.category
+            ? { source_id: rel.source_id, category: { id: parent.category.id } }
+            : { source_id: rel.source_id },
+          order: { id: 'ASC' },
         });
 
         if (existing) {

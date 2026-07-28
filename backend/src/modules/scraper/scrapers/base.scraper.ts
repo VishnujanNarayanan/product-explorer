@@ -1,5 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+export interface ShopifyProductPreview {
+  source_id: string;
+  title: string;
+  author: string | null;
+  price: number;
+  currency: string;
+  image_url: string;
+  source_url: string;
+  category_slug: string;
+  description: string;
+}
+
 @Injectable()
 export abstract class BaseScraper {
   protected readonly logger = new Logger(this.constructor.name);
@@ -102,6 +114,45 @@ export abstract class BaseScraper {
       .filter(Boolean)
       .map((w) => (w.length <= 2 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
       .join(' ');
+  }
+
+  /**
+   * Map one entry of a Shopify products.json feed to our product shape. Shared so the
+   * on-demand (interactive) and background paths cannot drift into producing different
+   * records for the same book.
+   */
+  protected toProductPreview(p: any, categorySlug: string): ShopifyProductPreview | null {
+    if (!p?.id || !p?.title) return null;
+
+    return {
+      source_id: String(p.id),
+      title: String(p.title).trim(),
+      author: this.parseAuthorFromHandle(p.handle),
+      price: this.lowestVariantPrice(p.variants),
+      currency: 'GBP', // /en-gb storefront; products.json carries no currency field
+      image_url: p?.images?.[0]?.src || '',
+      source_url: this.productUrl(p.handle),
+      category_slug: categorySlug,
+      description: this.stripHtml(p.body_html || ''),
+    };
+  }
+
+  /**
+   * A title has one variant per condition/location combination. The listing shows the
+   * cheapest in-stock copy, so mirror that; fall back to the cheapest of any variant.
+   */
+  protected lowestVariantPrice(variants: any[]): number {
+    if (!Array.isArray(variants) || variants.length === 0) return 0;
+
+    const prices = (available: boolean) =>
+      variants
+        .filter((v) => (available ? v?.available : true))
+        .map((v) => parseFloat(v?.price))
+        .filter((n) => !isNaN(n) && n > 0);
+
+    const inStock = prices(true);
+    const pool = inStock.length > 0 ? inStock : prices(false);
+    return pool.length > 0 ? Math.min(...pool) : 0;
   }
 
   /** Strip HTML tags from Shopify's body_html into plain text. */

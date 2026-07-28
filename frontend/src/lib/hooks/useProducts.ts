@@ -3,7 +3,16 @@ import { productsAPI } from '@/lib/api/products';
 import { Product, ProductFilters } from '@/lib/types';
 import { useToast } from './useToast'; // Need to add this import
 
-export const useProducts = (categorySlug?: string, initialFilters?: ProductFilters) => {
+/**
+ * `navigationSlug` disambiguates the category: a slug identifies a collection only within a
+ * navigation heading, and the same collection listed under two headings has its own products
+ * under each.
+ */
+export const useProducts = (
+  categorySlug?: string,
+  initialFilters?: ProductFilters,
+  navigationSlug?: string,
+) => {
   const [filters, setFilters] = useState<ProductFilters>(initialFilters || {});
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +28,12 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
       
       if (categorySlug) {
         // Use the category products endpoint
-        const response = await productsAPI.getProductsByCategory(categorySlug);
+        const response = await productsAPI.getProductsByCategory(
+          categorySlug,
+          undefined,
+          undefined,
+          navigationSlug,
+        );
         loadedProducts = response.products || [];
         jobQueued = response.jobQueued || false;
       } else {
@@ -73,7 +87,7 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
     } finally {
       setIsLoading(false);
     }
-  }, [categorySlug, filters]);
+  }, [categorySlug, filters, navigationSlug]);
 
   const search = useCallback((query: string, newFilters?: ProductFilters) => {
     if (newFilters) setFilters(newFilters);
@@ -108,7 +122,12 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
       setIsLoading(true);
       
       // This will trigger scraping
-      const response = await productsAPI.getProductsByCategory(categorySlug);
+      const response = await productsAPI.getProductsByCategory(
+        categorySlug,
+        undefined,
+        undefined,
+        navigationSlug,
+      );
       setProducts(response.products || []);
       
       return { jobQueued: response.jobQueued || false };
@@ -118,7 +137,7 @@ export const useProducts = (categorySlug?: string, initialFilters?: ProductFilte
     } finally {
       setIsLoading(false);
     }
-  }, [categorySlug]);
+  }, [categorySlug, navigationSlug]);
 
   return {
     products,

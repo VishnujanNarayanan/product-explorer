@@ -18,18 +18,31 @@ const toBoolean = () =>
     return value; // let @IsBoolean produce the error
   });
 
+/** The `?navigation=` slug, shared by every route that has to disambiguate a category. */
+const NavigationSlugProperty = (description: string) => (target: object, key: string) => {
+  ApiPropertyOptional({ example: 'fiction-books', description })(target, key);
+  IsOptional()(target, key);
+  IsString()(target, key);
+  MaxLength(255)(target, key);
+  Matches(SLUG_PATTERN, {
+    message: 'navigation must be lowercase alphanumeric words separated by single hyphens',
+  })(target, key);
+};
+
 export class GetCategoriesQueryDto {
   /** Filter to one navigation heading. Omitted means "every category". */
-  @ApiPropertyOptional({
-    example: 'fiction-books',
-    description: 'Navigation heading slug. Omit to list every category.',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  @Matches(SLUG_PATTERN, {
-    message: 'navigation must be lowercase alphanumeric words separated by single hyphens',
-  })
+  @NavigationSlugProperty('Navigation heading slug. Omit to list every category.')
+  navigation?: string;
+}
+
+/**
+ * A slug identifies a category only within a heading — the same collection is listed under
+ * several headings — so routes that take a slug accept the heading alongside it.
+ */
+export class GetCategoryQueryDto {
+  @NavigationSlugProperty(
+    'Navigation heading the category was reached through. Omit and the oldest match wins.',
+  )
   navigation?: string;
 }
 
@@ -58,7 +71,12 @@ export class ScrapeProductBodyDto {
   refresh?: boolean;
 }
 
-export class CategoryProductsQueryDto extends PaginationQueryDto {}
+export class CategoryProductsQueryDto extends PaginationQueryDto {
+  @NavigationSlugProperty(
+    'Navigation heading the category was reached through. Omit and the oldest match wins.',
+  )
+  navigation?: string;
+}
 
 export enum LegacyScrapeType {
   NAVIGATION = 'navigation',

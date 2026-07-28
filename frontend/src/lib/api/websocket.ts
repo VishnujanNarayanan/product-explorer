@@ -12,11 +12,32 @@ export interface WebSocketEvent {
   };
 }
 
+/**
+ * Which part of a live action a status message describes. `preparing` and `retrying` are
+ * groundwork the user should see as progress, not as an outcome; `fallback` means stored
+ * data is on screen while a queued scrape keeps going.
+ */
+export type ScrapeStep =
+  | 'preparing'
+  | 'opening-menu'
+  | 'scraping'
+  | 'retrying'
+  | 'fallback'
+  | 'done';
+
 export interface WebSocketResponse {
   type: 'DATA_CHUNK' | 'SCRAPE_STATUS' | 'SESSION_READY' | 'ERROR' | 'PROGRESS';
   payload: {
     products?: Product[];
     status?: 'active' | 'idle' | 'scraping' | 'ready';
+    step?: ScrapeStep;
+    /** Set while the menu is being retried, e.g. attempt 2 of 3. */
+    attempt?: number;
+    maxAttempts?: number;
+    /** Whether the products came off the live page or out of storage. */
+    source?: 'live' | 'stored';
+    /** True when a background scrape is still expected to add to what is shown. */
+    stillWorking?: boolean;
     message?: string;
     totalScraped?: number;
     chunkIndex?: number;
@@ -32,6 +53,10 @@ class WebSocketClient {
   private socket: Socket | null = null;
   private listeners: Map<string, WebSocketCallback[]> = new Map();
   private sessionId: string | null = null;
+  // The gateway only emits SESSION_READY once, right after it connects. A component that
+  // mounts later (navigating to /products) misses that event, so the flag is kept here and
+  // read back via isSessionReady() instead of relying on the event alone.
+  private sessionReady = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private connectionUrl: string;
@@ -67,6 +92,7 @@ class WebSocketClient {
 
     this.socket.on('SESSION_READY', (data: WebSocketResponse) => {
       console.log('🔵 Session ready:', data);
+      this.sessionReady = true;
       this.emit('session-ready', data);
     });
 
@@ -92,6 +118,9 @@ class WebSocketClient {
 
     this.socket.on('disconnect', (reason) => {
       console.log('🟡 WebSocket disconnected:', reason);
+      // The gateway tears down the Playwright session on disconnect, so the next
+      // connection gets a fresh SESSION_READY.
+      this.sessionReady = false;
       this.emit('disconnected', { reason });
       
       if (reason === 'io server disconnect') {
@@ -117,6 +146,11 @@ class WebSocketClient {
 
   public getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  /** True once the gateway has a live browser session behind this socket. */
+  public isSessionReady(): boolean {
+    return this.isConnected() && this.sessionReady;
   }
 
   public sendEvent(event: WebSocketEvent): void {

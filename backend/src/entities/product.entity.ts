@@ -1,10 +1,19 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToOne, OneToMany, JoinColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { Category } from './category.entity';
 import { ProductDetail } from './product-detail.entity';
 import { Review } from './review.entity';
 
+/**
+ * A product as it appears in one category.
+ *
+ * `source_id` is unique per category rather than globally. Categories are keyed by
+ * (navigation, slug), so the same collection listed under two headings is two rows that
+ * each scrape their own listing; a globally unique source_id would let the second scrape
+ * move every product off the first category and leave it empty.
+ */
 @Entity('product')
+@Index('uq_product_category_source_id', ['category', 'source_id'], { unique: true })
 export class Product {
   @ApiProperty({ example: 41 })
   @PrimaryGeneratedColumn()
@@ -13,9 +22,10 @@ export class Product {
   @ApiProperty({
     example: '9846944432401',
     description:
-      'The Shopify product id. Falls back to the URL handle when a page does not expose one.',
+      'The Shopify product id. Falls back to the URL handle when a page does not expose one. ' +
+      'Unique within a category, not across the catalogue.',
   })
-  @Column({ unique: true })
+  @Column()
   source_id: string;
 
   @ApiProperty({ example: 'A Court of Thorns and Roses' })

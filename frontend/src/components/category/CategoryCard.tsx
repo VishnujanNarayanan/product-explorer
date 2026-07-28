@@ -7,6 +7,7 @@ import { Category } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { useToast } from "@/lib/hooks/useToast"
+import { webSocketClient } from "@/lib/api/websocket"
 
 interface CategoryCardProps {
   category: Category
@@ -25,25 +26,15 @@ export function CategoryCard({ category, className }: CategoryCardProps) {
     setIsLoading(true)
     
     try {
-      // Check if interactive scraper is available
-      const useInteractive = typeof window !== 'undefined' && 
-        process.env.NEXT_PUBLIC_ENABLE_INTERACTIVE_SCRAPING === 'true'
-      
-      if (useInteractive && navigationSlug) {
-        // First hover over navigation
-        toast({
-          title: "Starting Interactive Session",
-          description: `Hovering over ${navigationSlug}...`,
-        })
-        
-        // In a real implementation, this would trigger WebSocket hover event
-        // For now, we'll simulate it
-        await new Promise(resolve => setTimeout(resolve, 500))
+      // Open the section's menu in the live browser session before the products page asks
+      // it to click this category, mirroring how a person would reach it on the site.
+      if (navigationSlug && webSocketClient.isSessionReady()) {
+        webSocketClient.hoverNavigation(navigationSlug, navigationSlug)
       }
-      
+
       // Navigate to products page
       router.push(`/products?category=${category.slug}&navigation=${navigationSlug}`)
-      
+
     } catch (error: any) {
       toast({
         title: "Error",

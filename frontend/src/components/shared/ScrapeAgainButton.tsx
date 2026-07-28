@@ -4,6 +4,8 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { useToast } from "@/lib/hooks/useToast"
+import { webSocketClient } from "@/lib/api/websocket"
+import { navigationAPI } from "@/lib/api/navigation"
 import { RefreshCw, Sparkles, Loader2, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,9 +21,9 @@ interface ScrapeAgainButtonProps {
 }
 
 export function ScrapeAgainButton({
-  categorySlug: _categorySlug,
+  categorySlug,
   categoryTitle,
-  navigationSlug: _navigationSlug,
+  navigationSlug,
   onScrapeComplete,
   className,
   variant = "default",
@@ -36,30 +38,35 @@ export function ScrapeAgainButton({
     if (isScraping) return
     
     setIsScraping(true)
-    
+
     try {
+      // Live session first: this is the same path a category click takes, so results arrive
+      // as DATA_CHUNK and the page updates itself. Progress is reported there, not here.
+      if (webSocketClient.isSessionReady()) {
+        webSocketClient.clickCategory(categoryTitle || categorySlug, categorySlug, navigationSlug)
+        setLastScraped(new Date())
+        toast({
+          title: "Scraping World of Books",
+          description: `Opening ${categoryTitle} in the live session — products will appear as they arrive.`,
+        })
+        return
+      }
+
+      // No live session: queue a listing scrape and show whatever is already stored. The
+      // scrape keeps running after this returns, so the wording says so rather than
+      // claiming fresh data has landed.
+      const response = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug)
+      setLastScraped(new Date())
+
       toast({
-        title: "Starting Fresh Scrape",
-        description: `Scraping latest products from ${categoryTitle}...`,
+        title: "Scrape Queued",
+        description: response.jobQueued
+          ? `Fetching more of ${categoryTitle} in the background — this page will fill in.`
+          : `${categoryTitle} is fully scraped; showing everything stored.`,
       })
 
-      // In a real implementation, this would call your WebSocket or API
-      // For now, simulate with timeout
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      setLastScraped(new Date())
-      
-      toast({
-        title: "Scrape Complete!",
-        description: "Fresh data loaded from World of Books",
-        variant: "default",
-      })
-      
-      if (onScrapeComplete) {
-        // This would be real products from your API
-        onScrapeComplete([])
-      }
-      
+      onScrapeComplete?.(response.products || [])
+
     } catch (error: any) {
       toast({
         title: "Scrape Failed",
@@ -116,7 +123,8 @@ export function ScrapeAgainButton({
       {lastScraped && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <CheckCircle className="h-3 w-3 text-green-500" />
-          <span>Scraped {formatTimeSince(lastScraped)}</span>
+          {/* "Requested", not "Scraped": the scrape continues after the click returns. */}
+          <span>Requested {formatTimeSince(lastScraped)}</span>
         </div>
       )}
     </div>

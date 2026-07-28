@@ -110,28 +110,37 @@ async function seed(ds: DataSource, fixture: Fixture, reset: boolean) {
   console.log(`navigation: ${navBySlug.size} rows`);
 
   // ---------- categories ----------
+  // Keyed by (navigation, slug): the same collection is listed under more than one heading
+  // and each listing is its own row, so the slug alone cannot identify one.
   for (const c of fixture.categories) {
     const navigation = navBySlug.get(c.navigation_slug);
     if (!navigation) {
       console.warn(`  ! category "${c.slug}" references unknown navigation "${c.navigation_slug}"`);
       continue;
     }
-    await catRepo.upsert(
-      [
-        {
-          title: c.title,
-          slug: c.slug,
-          last_page_scraped: c.last_page_scraped,
-          is_exhausted: c.is_exhausted,
-          last_scraped_at: new Date(),
-          navigation: { id: navigation.id },
-        } as any,
-      ],
-      ['slug'],
-    );
+    const existing = await catRepo.findOne({
+      where: { slug: c.slug, navigation: { id: navigation.id } },
+    });
+    await catRepo.save({
+      ...(existing ?? {}),
+      title: c.title,
+      slug: c.slug,
+      last_page_scraped: c.last_page_scraped,
+      is_exhausted: c.is_exhausted,
+      last_scraped_at: new Date(),
+      navigation: { id: navigation.id },
+    } as any);
   }
-  const catBySlug = new Map((await catRepo.find()).map((c) => [c.slug, c]));
-  console.log(`categories: ${catBySlug.size} rows`);
+  const categories = await catRepo.find({ relations: ['navigation'] });
+  const catByKey = new Map(
+    categories.map((c) => [`${c.navigation?.slug ?? ''}|${c.slug}`, c]),
+  );
+  // Fixture products name a category by slug alone; without a heading the first listing wins.
+  const catBySlug = new Map<string, (typeof categories)[number]>();
+  for (const c of [...categories].sort((a, b) => a.id - b.id)) {
+    if (!catBySlug.has(c.slug)) catBySlug.set(c.slug, c);
+  }
+  console.log(`categories: ${catByKey.size} rows`);
 
   // ---------- products ----------
   let inserted = 0;
@@ -144,26 +153,26 @@ async function seed(ds: DataSource, fixture: Fixture, reset: boolean) {
       continue;
     }
     try {
-      await productRepo.upsert(
-        [
-          {
-            source_id: p.source_id,
-            title: p.title,
-            author: p.author,
-            price: p.price,
-            currency: p.currency,
-            image_url: p.image_url,
-            source_url: p.source_url,
-            last_scraped_at: new Date(),
-            category: { id: category.id },
-          } as any,
-        ],
-        ['source_id'],
-      );
+      // Matched within the category — source_id is unique per category, not globally.
+      const existing = await productRepo.findOne({
+        where: { source_id: p.source_id, category: { id: category.id } },
+      });
+      await productRepo.save({
+        ...(existing ?? {}),
+        source_id: p.source_id,
+        title: p.title,
+        author: p.author,
+        price: p.price,
+        currency: p.currency,
+        image_url: p.image_url,
+        source_url: p.source_url,
+        last_scraped_at: new Date(),
+        category: { id: category.id },
+      } as any);
       inserted++;
     } catch (err: any) {
-      // `source_url` carries its own unique constraint. If a row scraped earlier already holds
-      // this URL under a different source_id, keep the existing row rather than fighting it.
+      // Any surviving uniqueness clash means a row already stands for this product in this
+      // category; keep what is stored rather than fighting the constraint.
       if (err?.code === '23505') {
         skipped++;
         continue;
@@ -175,14 +184,16 @@ async function seed(ds: DataSource, fixture: Fixture, reset: boolean) {
 
   // ---------- product detail ----------
   const detailSourceIds = fixture.product_details.map((d) => d.source_id);
-  const productIdBySourceId = new Map(
-    (
-      await productRepo.find({
-        where: { source_id: In(detailSourceIds.length ? detailSourceIds : ['']) },
-        select: ['id', 'source_id'],
-      })
-    ).map((p) => [p.source_id, p.id]),
-  );
+  // A product can exist once per category; detail belongs to the oldest copy, which is the
+  // row the detail endpoint resolves a source_id to.
+  const productIdBySourceId = new Map<string, number>();
+  for (const p of await productRepo.find({
+    where: { source_id: In(detailSourceIds.length ? detailSourceIds : ['']) },
+    select: ['id', 'source_id'],
+    order: { id: 'ASC' },
+  })) {
+    if (!productIdBySourceId.has(p.source_id)) productIdBySourceId.set(p.source_id, p.id);
+  }
 
   let details = 0;
   for (const d of fixture.product_details) {
