@@ -4,6 +4,7 @@ import './globals.css'
 import { AppProvider } from '@/providers/AppProvider'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
+import { StartAtHome } from '@/components/layout/StartAtHome'
 
 // Display: a bookish serif with an optical-size axis, used only for headings and the
 // wordmark. Body: a plain grotesque that stays legible at the sizes a catalogue needs.
@@ -44,6 +45,7 @@ export default function RootLayout({
         className={`${sans.variable} ${display.variable} ${mono.variable} flex min-h-screen flex-col font-sans`}
       >
         <AppProvider>
+          <StartAtHome />
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
