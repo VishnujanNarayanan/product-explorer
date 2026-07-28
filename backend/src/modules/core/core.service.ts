@@ -3,7 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Navigation } from '../../entities/navigation.entity';
 import { Category } from '../../entities/category.entity';
+import { Product } from '../../entities/product.entity';
 import { findCategory } from '../../common/category-lookup';
+
+export interface PaginatedProducts {
+  products: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
 
 @Injectable()
 export class CoreService {
@@ -12,6 +21,8 @@ export class CoreService {
     private navigationRepository: Repository<Navigation>,
     @InjectRepository(Category)
     private categoryRepository: Repository<Category>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
   ) {}
 
   async getNavigation(): Promise<Navigation[]> {
@@ -56,6 +67,43 @@ export class CoreService {
       'parent',
       'products',
     ]);
+  }
+
+  /**
+   * Products across every category, straight from storage — this never scrapes, so the
+   * home page can fill itself without touching the origin.
+   *
+   * `random` draws a fresh sample instead of a page: the home shelf is meant to turn over
+   * on every visit. Sampling is limited to products that have a cover, because a shelf of
+   * placeholder tiles is not worth showing.
+   */
+  async getProducts(page = 1, limit = 24, random = false): Promise<PaginatedProducts> {
+    const query = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category');
+
+    if (random) {
+      // `limit`, not `take`: `take` paginates through a DISTINCT subquery, and Postgres
+      // rejects an ORDER BY RANDOM() that is not in the select list. The join is
+      // many-to-one, so no row multiplication makes DISTINCT necessary here anyway.
+      const products = await query
+        .where("product.image_url <> ''")
+        .orderBy('RANDOM()')
+        .limit(limit)
+        .getMany();
+
+      const total = await this.productRepository.count();
+      return { products, total, page: 1, limit, hasMore: total > products.length };
+    }
+
+    const [products, total] = await query
+      .orderBy('product.last_scraped_at', 'DESC')
+      .addOrderBy('product.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return { products, total, page, limit, hasMore: page * limit < total };
   }
 
   async healthCheck(): Promise<{ status: string; timestamp: Date; services: any }> {

@@ -64,10 +64,12 @@
     --input: 160 17% 20%;
     --ring: 165 45% 45%;
 
-    --brand: 157 30% 8%;
+    /* Kept a step lighter than the page: in dark mode a near-black band on a near-black
+       page reads as nothing at all, and the band is what the menu hangs from. */
+    --brand: 158 20% 11%;
     --brand-foreground: 150 12% 92%;
     --brand-muted: 154 12% 62%;
-    --brand-border: 160 17% 17%;
+    --brand-border: 160 17% 19%;
 
     --highlight: 39 67% 55%;
     --highlight-foreground: 156 19% 5%;
@@ -86,10 +88,13 @@
   /*
    * Fraunces has an optical-size axis: dialling it up at display sizes tightens the
    * serifs, which is the whole reason to use it over a static serif.
+   *
+   * Only h1 and h2 take it by default. An h3 is as likely to be a product tile's title at
+   * 14px, where a display serif costs legibility and buys nothing; those opt in with
+   * `font-display`.
    */
   h1,
-  h2,
-  h3 {
+  h2 {
     font-family: var(--font-display), Georgia, serif;
     font-variation-settings: 'SOFT' 0, 'WONK' 1, 'opsz' 100;
     letter-spacing: -0.015em;

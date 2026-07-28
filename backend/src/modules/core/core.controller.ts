@@ -31,6 +31,7 @@ import {
   CleanupResponseDto,
   ErrorResponseDto,
   HealthResponseDto,
+  PaginatedProductsDto,
   ScrapeNavigationResponseDto,
   ScrapeProductResponseDto,
 } from '../../common/dto/responses.dto';
@@ -40,6 +41,7 @@ import {
   GetCategoryQueryDto,
   GetProductQueryDto,
   LegacyScrapeParamsDto,
+  ListProductsQueryDto,
   LegacyScrapeType,
   ScrapeProductBodyDto,
 } from './dto';
@@ -134,6 +136,25 @@ export class CoreController {
     @Query() query: CategoryProductsQueryDto,
   ) {
     return this.scrapeCategoryOrFail(params.slug, query);
+  }
+
+  @Get('products')
+  @ApiOperation({
+    summary: 'Products across every category',
+    description:
+      'Reads stored products only — nothing here queues a scrape, so a listing page costs ' +
+      'the origin nothing. Pass `random=true` for a sample of products that have a cover, ' +
+      'which is what the home shelf shows.',
+  })
+  @ApiOkResponse({ type: PaginatedProductsDto })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid page, limit or random' })
+  async getProducts(@Query() query: ListProductsQueryDto) {
+    try {
+      return await this.coreService.getProducts(query.page, query.limit, query.random ?? false);
+    } catch (error) {
+      this.logger.error(`Products error: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Failed to load products');
+    }
   }
 
   @Get('products/:sourceId')
