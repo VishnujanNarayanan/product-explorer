@@ -12,7 +12,7 @@ import { useToast } from '@/lib/hooks/useToast'
 
 export default function Home() {
   const { navigation, isLoading: isLoadingNavigation, error, refreshNavigation } = useNavigation()
-  const { products, total, isLoading: isLoadingProducts, reshuffle } = useRandomProducts(10)
+  const { products, isLoading: isLoadingProducts, reshuffle } = useRandomProducts(10)
   const { toast } = useToast()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [hasAttemptedRefresh, setHasAttemptedRefresh] = useState(false)
@@ -53,7 +53,6 @@ export default function Home() {
     }
   }
 
-  const categoryCount = navigation.reduce((sum, nav) => sum + (nav.categories?.length || 0), 0)
   // The hero shelf and the grid draw from the same sample; the shelf takes the first few
   // covers so nothing is fetched twice.
   const shelf = products.slice(0, 5)
@@ -93,15 +92,6 @@ export default function Home() {
           <div className="min-w-0 lg:col-span-7">
             <Shelf products={shelf} isLoading={isLoadingProducts} />
           </div>
-        </div>
-
-        {/* Honest counts, taken from what is actually stored. */}
-        <div className="border-t">
-          <dl className="container grid grid-cols-3 divide-x divide-border">
-            <Stat label="Books stored" value={total ? total.toLocaleString() : '—'} />
-            <Stat label="Sections" value={navigation.length || '—'} />
-            <Stat label="Categories" value={categoryCount || '—'} />
-          </dl>
         </div>
       </section>
 
@@ -218,15 +208,6 @@ export default function Home() {
           )}
         </div>
       </section>
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="py-5 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
-      <dt className="label-meta">{label}</dt>
-      <dd className="mt-1 font-mono text-xl">{value}</dd>
     </div>
   )
 }
