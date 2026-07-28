@@ -5,10 +5,11 @@ import { CoreService } from './core.service';
 import { ScraperModule } from '../scraper/scraper.module'; 
 import { Navigation } from '../../entities/navigation.entity';
 import { Category } from '../../entities/category.entity';
+import { Product } from '../../entities/product.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Navigation, Category]),
+    TypeOrmModule.forFeature([Navigation, Category, Product]),
     ScraperModule, // ADD THIS IMPORT
   ],
   controllers: [CoreController],

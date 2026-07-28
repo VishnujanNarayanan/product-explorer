@@ -59,6 +59,21 @@ export class GetProductQueryDto {
   refresh?: boolean;
 }
 
+export class ListProductsQueryDto extends PaginationQueryDto {
+  /** Draw a random sample instead of a page — what the home shelf asks for. */
+  @ApiPropertyOptional({
+    example: true,
+    default: false,
+    description:
+      'Return a random sample of products that have a cover image, instead of a page in ' +
+      'scrape order. `page` is ignored when set.',
+  })
+  @IsOptional()
+  @toBoolean()
+  @IsBoolean({ message: 'random must be true or false' })
+  random?: boolean;
+}
+
 export class ScrapeProductBodyDto {
   @ApiPropertyOptional({
     example: true,
