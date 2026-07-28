@@ -63,7 +63,10 @@ function ProductsPageContent() {
   
   // Refs
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isInitializingRef = useRef(false)
+  // The category currently being initialised. A boolean here meant that clicking a second
+  // category while the first was still loading hit the early return below, so the new
+  // category never initialised and the old books stayed on screen.
+  const initializingSlugRef = useRef<string | null>(null)
   const loadProductsRef = useRef(loadProducts)
   const startPollingRef = useRef<(() => void) | null>(null)
   const lastProductCountRef = useRef(0)
@@ -74,6 +77,10 @@ function ProductsPageContent() {
   // Category whose live attempt has already been handed over to background polling, so the
   // handover happens once per category rather than on every status update.
   const fallbackPolledRef = useRef<string | null>(null)
+  // The category the products held by useProducts belong to. They are the previous
+  // category's until the refetch lands, and painting those under the new heading is what
+  // made switching mid-load look like nothing had happened.
+  const loadedSlugRef = useRef<string | null>(null)
 
   // Keep refs updated
   useEffect(() => {
@@ -98,8 +105,12 @@ function ProductsPageContent() {
   useEffect(() => {
     if (isWsConnected && wsCategory === categorySlug && wsProducts.length > 0) {
       setDisplayProducts(wsProducts)
-    } else {
+    } else if (loadedSlugRef.current === categorySlug) {
       setDisplayProducts(products)
+    } else {
+      // Nothing on screen belongs to this category yet: show the loading state rather than
+      // the last category's books.
+      setDisplayProducts([])
     }
   }, [wsProducts, products, isWsConnected, wsCategory, categorySlug])
 
@@ -135,10 +146,11 @@ function ProductsPageContent() {
           lastProductCountRef.current = response.products.length
           stopPolling()
           setHasInitiallyLoaded(true)
-          isInitializingRef.current = false
+          initializingSlugRef.current = null
           
           await loadProductsRef.current()
-          
+          loadedSlugRef.current = categorySlug
+
           toast({
             title: "Products Ready!",
             description: `Loaded ${response.products.length} products`,
@@ -146,10 +158,11 @@ function ProductsPageContent() {
         } else if (pollCount >= maxPolls) {
           stopPolling()
           setHasInitiallyLoaded(true)
-          isInitializingRef.current = false
+          initializingSlugRef.current = null
           
           if (response.products && response.products.length > 0) {
             await loadProductsRef.current()
+            loadedSlugRef.current = categorySlug
           }
           
           toast({
@@ -162,7 +175,7 @@ function ProductsPageContent() {
         if (pollCount >= maxPolls) {
           stopPolling()
           setHasInitiallyLoaded(true)
-          isInitializingRef.current = false
+          initializingSlugRef.current = null
         }
       }
     }, 5000)
@@ -175,13 +188,15 @@ function ProductsPageContent() {
 
   // Load products when category changes
   useEffect(() => {
-    if (!categorySlug || isInitializingRef.current) return
+    if (!categorySlug || initializingSlugRef.current === categorySlug) return
     
     setHasInitiallyLoaded(false)
     setIsPolling(false)
     stopPolling()
-    isInitializingRef.current = true
+    initializingSlugRef.current = categorySlug
     lastProductCountRef.current = 0
+    loadedSlugRef.current = null
+    setDisplayProducts([])
     
     const initializeProducts = async () => {
       try {
@@ -190,6 +205,7 @@ function ProductsPageContent() {
         const result = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug || undefined)
         lastProductCountRef.current = result.products?.length || 0
         await loadProductsRef.current()
+        loadedSlugRef.current = categorySlug
 
         await new Promise(resolve => setTimeout(resolve, 100))
 
@@ -203,12 +219,12 @@ function ProductsPageContent() {
           startPollingRef.current()
         } else {
           setHasInitiallyLoaded(true)
-          isInitializingRef.current = false
+          initializingSlugRef.current = null
         }
       } catch (error) {
         console.error('Failed to initialize products:', error)
         setHasInitiallyLoaded(true)
-        isInitializingRef.current = false
+        initializingSlugRef.current = null
       }
     }
 
@@ -216,7 +232,6 @@ function ProductsPageContent() {
 
     return () => {
       stopPolling()
-      isInitializingRef.current = false
     }
   }, [categorySlug, navigationSlug, stopPolling])
 
@@ -258,12 +273,17 @@ function ProductsPageContent() {
     liveRequestedRef.current = null
     fallbackPolledRef.current = null
 
-    if (!isWsConnected) {
-      toast({
-        title: "Offline Mode",
-        description: "Live browser session unavailable — showing stored products",
-      })
-    }
+    const title = categories.find((c) => c.slug === slug)?.title || slug
+
+    // Clicking a second category while the first is still working used to look like
+    // nothing had happened: the old books stayed on screen and the banner still named the
+    // old category. Say straight away which one is being fetched now.
+    toast({
+      title: isWsConnected ? `Opening ${title}` : `Loading ${title}`,
+      description: isWsConnected
+        ? "Picking the category on World of Books…"
+        : "No live session — showing stored books for this category",
+    })
 
     if (slug === categorySlug) {
       // Same category: the URL will not change, so nothing would re-trigger the effect.
@@ -369,7 +389,7 @@ function ProductsPageContent() {
   // What the system is doing, in one line. Falls back to a plain description when the live
   // session has not said anything yet.
   const progressLine =
-    wsStatusMessage ||
+    (wsCategory === categorySlug ? wsStatusMessage : null) ||
     (isPolling
       ? 'Fetching from the background scrape…'
       : `Loading products from ${currentCategory?.title || 'this category'}…`)
@@ -385,12 +405,17 @@ function ProductsPageContent() {
   const isLoadingMore = isWsLoading || (isWsConnected && scraperStatus === 'scraping')
 
   // One report, rendered at both ends of the grid.
+  const categoryName = currentCategory?.title || 'this category'
   const bannerProps = {
+    // Naming the category matters most when you have just switched to another one while
+    // the first was still going.
     title: isWsLoading
-      ? 'Fetching the next page of books'
+      ? displayProducts.length === 0
+        ? `Opening ${categoryName}`
+        : `Fetching more books from ${categoryName}`
       : wsSource === 'stored'
         ? 'Showing stored books while the scrape continues'
-        : 'Still fetching more books',
+        : `Still fetching more books from ${categoryName}`,
     line: progressLine,
     retryLine,
   }
