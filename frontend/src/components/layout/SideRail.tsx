@@ -56,8 +56,23 @@ export function SideRail({
    * fold of the rail's own scroll area. Bring it into view when it mounts.
    */
   const focusActive = useCallback((node: HTMLElement | null) => {
-    node?.scrollIntoView({ block: "nearest" })
+    // offsetParent is null while the list is collapsed. Scrolling a row nobody can see moved
+    // the window instead of the rail — on a phone the rail is a full-width block near the top,
+    // so opening the list dragged the page up to it and the books went off screen.
+    if (!node || node.offsetParent === null) return
+    node.scrollIntoView({ block: "nearest" })
   }, [])
+
+  /**
+   * Picking a category is a request to look at its books, so on a phone — where the list is a
+   * disclosure sitting above them — close it and put the page back at the top. Closing alone
+   * left whatever the list had scrolled past still filling the screen.
+   */
+  const collapseAndReveal = () => {
+    if (!isOpen) return
+    setIsOpen(false)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   const rowClass = (isActive?: boolean) =>
     cn(
@@ -119,7 +134,7 @@ export function SideRail({
                   key={item.id}
                   href={item.href}
                   ref={item.isActive ? focusActive : undefined}
-                  onClick={() => setIsOpen(false)}
+                  onClick={collapseAndReveal}
                   className={rowClass(item.isActive)}
                 >
                   <span className="truncate">{item.title}</span>
@@ -132,7 +147,7 @@ export function SideRail({
                   ref={item.isActive ? focusActive : undefined}
                   onClick={() => {
                     // Collapse first: the point of picking one is to get to the books.
-                    setIsOpen(false)
+                    collapseAndReveal()
                     onSelect?.(item)
                   }}
                   aria-current={item.isActive ? "true" : undefined}

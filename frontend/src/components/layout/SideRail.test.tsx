@@ -72,6 +72,39 @@ describe('SideRail', () => {
     expect(toggle()).toBeInTheDocument();
   });
 
+  /**
+   * Closing alone was not enough. The list scrolls its active row into view when it opens, and on
+   * a phone the rail is a full-width block near the top — so opening dragged the window up to the
+   * rail, and picking a category left you looking at that instead of the books. It read as the
+   * panel having stayed open.
+   */
+  describe('after picking a category', () => {
+    it('puts the page back at the top, where the books are', async () => {
+      const user = userEvent.setup();
+      const scrollTo = jest.fn();
+      window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+      render(<SideRail label="Categories" items={items} onSelect={jest.fn()} />);
+
+      await user.click(toggle());
+      await user.click(screen.getByRole('button', { name: /Science Fiction/ }));
+
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+    });
+
+    it('leaves the page alone on a wide screen, where the list never opened', async () => {
+      const user = userEvent.setup();
+      const scrollTo = jest.fn();
+      window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+      render(<SideRail label="Categories" items={items} onSelect={jest.fn()} />);
+
+      // The list is always visible on lg and up, so `isOpen` stays false and a click there
+      // must not throw the reader back to the top of a page they were reading.
+      await user.click(screen.getByRole('button', { name: /Science Fiction/ }));
+
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+  });
+
   it('points the toggle at the list it controls', () => {
     render(<SideRail label="Categories" items={items} />);
 

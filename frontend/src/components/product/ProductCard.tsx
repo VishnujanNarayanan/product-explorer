@@ -57,7 +57,7 @@ export function ProductCard({
         className,
       )}
     >
-      <div className="relative aspect-[3/4] bg-white p-2 dark:bg-secondary sm:p-4">
+      <div className="relative aspect-[3/4] bg-white p-3 dark:bg-secondary sm:p-4">
         {product.image_url ? (
           <Image
             src={product.image_url}
@@ -65,7 +65,7 @@ export function ProductCard({
             fill
             // Covers arrive at whatever proportion the publisher printed. Contain keeps
             // every one whole rather than cropping the title off a tall paperback.
-            className="object-contain p-1.5 transition-transform duration-300 group-hover:scale-[1.03] sm:p-3"
+            className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03] sm:p-3"
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 16vw"
           />
         ) : (
@@ -86,8 +86,8 @@ export function ProductCard({
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col border-t p-2.5 sm:p-4">
-        <h3 className="text-xs font-medium leading-snug sm:text-sm">
+      <div className="flex flex-1 flex-col border-t p-3 sm:p-4">
+        <h3 className="text-sm font-medium leading-snug">
           <Link
             href={`/products/${product.source_id}`}
             className="line-clamp-2 after:absolute after:inset-0 hover:underline"
@@ -108,7 +108,7 @@ export function ProductCard({
         )}
 
         {product.price && (
-          <p className="mt-auto pt-2 font-mono text-xs font-medium text-highlight sm:pt-3 sm:text-sm">
+          <p className="mt-auto pt-3 font-mono text-sm font-medium text-highlight">
             £{product.price}
           </p>
         )}
@@ -123,7 +123,7 @@ export function ProductCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="relative z-20 mt-2 inline-flex items-center gap-1 self-start border-b border-transparent text-[0.6875rem] leading-tight text-muted-foreground transition-colors hover:border-current hover:text-foreground sm:mt-3 sm:gap-1.5 sm:text-xs"
+            className="relative z-20 mt-3 inline-flex items-center gap-1.5 self-start border-b border-transparent text-xs leading-tight text-muted-foreground transition-colors hover:border-current hover:text-foreground"
           >
             Buy on World of Books
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
