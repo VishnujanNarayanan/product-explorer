@@ -55,9 +55,30 @@ export const navigationAPI = {
   ) =>
     api.post<{ message: string; added: number; updated: number; total: number }>(
       `/categories/${slug}/import${navigationQuery(options.navigationSlug)}`,
-      { products, page: options.page ?? 1 },
+      { products: products.map(toImportable), page: options.page ?? 1 },
     ),
 };
+
+/**
+ * Sends only the fields the API declares, and rebuilds each row rather than spreading it.
+ *
+ * The endpoint validates with `forbidNonWhitelisted`, so one unrecognised property rejects the
+ * entire batch — and a rejection there never reaches a controller, so nothing is logged and the
+ * import fails in silence. That is exactly what happened: rows carried the `scraped_in_browser`
+ * flag the grid uses to mark them, every import came back 400, and books kept appearing on
+ * screen and 404ing when opened.
+ */
+function toImportable(product: ImportableProduct): ImportableProduct {
+  return {
+    source_id: product.source_id,
+    title: product.title,
+    author: product.author,
+    price: product.price,
+    currency: product.currency,
+    image_url: product.image_url,
+    source_url: product.source_url,
+  };
+}
 
 export interface CategoryProductsResponse {
   message: string;
