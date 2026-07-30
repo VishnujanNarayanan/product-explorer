@@ -20,6 +20,7 @@
 </div>
 
 <p align="center">
+  📖 <a href="#overview">Overview</a> ·
   🌐 <a href="#try-it">Try it</a> ·
   ✨ <a href="#what-it-does">What it does</a> ·
   ⚙️ <a href="#how-it-works">How it works</a> ·
@@ -30,6 +31,22 @@
 </p>
 
 ---
+
+## Overview
+
+[World of Books](https://www.worldofbooks.com/en-gb) is a UK retailer selling several million
+second-hand books, films and music. Its catalogue is organised the way a bookshop is — broad
+headings like *Fiction* or *Children's Books*, each holding dozens of categories, each holding
+books.
+
+This project rebuilds that catalogue as a browsable app, and gathers it category by category from
+the live site. Nothing is downloaded in advance: the first person to open *Crime & Mystery* causes
+it to be fetched from World of Books right then, and it is stored so everyone after them sees it
+immediately. Opening a book fetches its description and specifications the same way.
+
+It is a full-stack demonstration — a Next.js front end, a NestJS API, PostgreSQL, Redis, and
+scrapers built on Playwright and Crawlee — of doing that politely and reliably against a real site
+that was not built to be read this way.
 
 ## Try it
 
