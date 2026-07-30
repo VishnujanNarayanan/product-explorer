@@ -11,40 +11,59 @@ Navigation headings  →  Categories  →  Product grid  →  Product detail
    (6 headings)        (143 listings)  (paged, 24/pg)    (specs + related)
 ```
 
+**Live:** [product-explorer-two.vercel.app](https://product-explorer-two.vercel.app) ·
+API [product-explorer-1-i0m1.onrender.com/api/docs](https://product-explorer-1-i0m1.onrender.com/api/docs)
+
+> The API is on a free instance that sleeps after ~15 minutes idle, so the first request after a
+> quiet spell takes around 50 seconds to wake it.
+
+Opening a category nobody has opened before scrapes it live and shows the books within a second or
+two. That scrape runs in the **visitor's browser**, not on the server — see
+[Scraping from the visitor's browser](#scraping-from-the-visitors-browser) for why, which is the
+most interesting thing in this repository.
+
 ---
 
 ## Architecture
 
 ```
                  ┌────────────────────────────────────────────┐
-   browser ──────▶  Next.js (App Router)          :3000       │
-                 │  SWR for fetching · Socket.IO for progress │
-                 └───────────────┬────────────────────────────┘
-                                 │ REST /api  +  WS /api/ws
-                 ┌───────────────▼────────────────────────────┐
-                 │  NestJS                        :3001       │
-                 │                                            │
-                 │  CoreController      navigation/categories │
-                 │  ProductsController  paged listing         │
-                 │      │ ValidationPipe (DTOs) on every input│
-                 │      ▼                                     │
-                 │  ScraperService ──enqueue──▶ BullMQ queue  │
-                 │      │                            │        │
-                 │      │ read-through cache         │ worker │
-                 └──────┼────────────────────────────┼────────┘
-                        ▼                            ▼
-                 ┌────────────┐            ┌───────────────────┐
-                 │ PostgreSQL │            │ Crawlee scrapers  │
-                 │  TypeORM   │◀──persist──│ Playwright / HTTP │
-                 └────────────┘            └─────────┬─────────┘
-                 ┌────────────┐                      │
-                 │   Redis    │◀──cache + queue      ▼
-                 └────────────┘             World of Books /en-gb
+   browser ──────▶  Next.js (App Router)          :3000       │───────────┐
+                 │  SWR · Socket.IO · browser-side scraper    │           │
+                 └───────────────┬────────────────────────────┘           │
+                                 │ REST /api  +  WS /api/ws               │
+                 ┌───────────────▼────────────────────────────┐           │
+                 │  NestJS                        :3001       │           │
+                 │                                            │           │
+                 │  CoreController      navigation/categories │           │
+                 │  ProductsController  paged listing         │           │
+                 │      │ ValidationPipe (DTOs) on every input│           │
+                 │      ▼                                     │           │
+                 │  ScraperService ──enqueue──▶ BullMQ queue  │           │
+                 │      │                            │        │           │
+                 │      │ read-through cache         │ worker │           │
+                 └──────┼────────────────────────────┼────────┘           │
+                        ▼                            ▼                    │
+                 ┌────────────┐            ┌───────────────────┐          │
+                 │ PostgreSQL │            │ Crawlee scrapers  │          │
+                 │  TypeORM   │◀──persist──│ Playwright / HTTP │          │
+                 └────────────┘            └─────────┬─────────┘          │
+                        ▲        ┌────────┐          │                    │
+                        └──import│  Redis │◀─cache   ▼                    │
+                                 └────────┘  + queue                      │
+                                             World of Books /en-gb ◀──────┘
+                                                                collections
+                                                              /products.json
 ```
 
 **Requests never block on a scrape.** A listing endpoint answers from PostgreSQL immediately and
 enqueues the *next* unfetched page on BullMQ; the worker scrapes, persists, and the following
 request sees more data. Redis holds both the queue and a per-page response cache.
+
+**The rightmost path is the one that carries production.** The browser reads the collection feed
+itself and posts the result back to be validated and stored, because the hosted API's address is
+rate-limited by the storefront while a visitor's is not. See
+[Scraping from the visitor's browser](#scraping-from-the-visitors-browser).
 
 Key decisions and why:
 
@@ -56,6 +75,9 @@ Key decisions and why:
 | **Checkpoint per category** (`last_page_scraped`, `is_exhausted`) | Browsing fills the catalogue progressively instead of bulk-downloading, and a finished collection stops generating traffic entirely |
 | **JSON feed for listings, browser for detail** | The listing grid is client-rendered by Algolia and never resolves headless; detail pages are server-rendered ([details](#why-listings-use-the-json-feed)) |
 | **Never cache an empty or failed result** | Otherwise one transient failure masquerades as a valid empty answer for the whole TTL |
+| **Scrape listings in the visitor's browser** | World of Books answers the hosted API's datacentre address with `429` and a visitor's browser normally. The browser is the only thing in the system that can reach the storefront from production ([details](#scraping-from-the-visitors-browser)) |
+| **Validate imported rows, never trust them** | The server cannot verify a browser-scraped row by re-fetching — that is the thing it is blocked from doing — so `ImportedProductDto` refuses everything it still can: foreign hosts, non-Shopify ids, implausible prices, oversized batches |
+| **Redis is optional at request time** | Cache and queue are optimisations. Both are bounded and non-fatal, so an unreachable Redis degrades to reading PostgreSQL rather than failing a request for data already stored |
 
 ---
 
@@ -160,6 +182,26 @@ credentials are committed.
 Note the backend reads `.env` from the **repository root**, not `backend/` — `ConfigModule` is
 configured with `envFilePath: ['.env', '../.env']`.
 
+**Connections take either shape.** Managed hosts hand out either a single URL (Neon, Supabase,
+Upstash, Railway) or discrete host/port/password fields (Render's private networking,
+docker-compose). Both are accepted, URL first:
+
+| | URL form | Discrete form |
+| --- | --- | --- |
+| PostgreSQL | `DATABASE_URL` | `DB_HOST` `DB_PORT` `DB_USERNAME` `DB_PASSWORD` `DB_DATABASE` |
+| Redis | `REDIS_URL` | `REDIS_HOST` `REDIS_PORT` `REDIS_USERNAME` `REDIS_PASSWORD` |
+
+TLS follows the hostname — on for a qualified name like `ep-x.aws.neon.tech`, off for a bare one
+like `localhost`, a compose service or a Render internal host — which is what each actually
+requires. `DB_SSL` and `REDIS_TLS` override it, and `DB_SSL_REJECT_UNAUTHORIZED=true` demands a
+verified chain where the provider has one.
+
+**Watching a scrape.** `HEADLESS=false` launches a real Chromium window instead of a headless one,
+with `BROWSER_WINDOW_POSITION` and `BROWSER_WINDOW_SIZE` to place it. A headless timeout looks the
+same whether a selector moved or the network failed, and seeing the page tells you which. It is
+also the only way to watch the interactive scraper drive the site — it needs more memory than a
+free host provides, so it can only ever run locally.
+
 ---
 
 ## API
@@ -184,7 +226,8 @@ cd backend && npm run openapi:export
 | `GET` | `/api/products` | `category`, `random`, `page`, `limit` | Paged product listing, read from storage only. `random=true` samples books that have a cover — what the home shelf shows |
 | `GET` | `/api/products/:sourceId` | `refresh` | Product with detail, scraping on demand |
 | `POST` | `/api/scrape/navigation` | | Re-scrape navigation |
-| `POST` | `/api/scrape/category/:slug` | `navigation`, `page`, `limit` | Queue a listing scrape (returns immediately) |
+| `POST` | `/api/scrape/category/:slug` | `navigation`, `page`, `limit` | Scrape a listing. Body `{ "refresh": true }` fetches the next page during the request; without it, returns stored data and queues a job |
+| `POST` | `/api/categories/:slug/import` | `navigation` | Store products a visitor's browser scraped. Body `{ products: [...], page }`, every row validated against the shape and hosts a genuine feed entry has ([why](#scraping-from-the-visitors-browser)) |
 | `POST` | `/api/scrape/product/:sourceId` | | Queue a detail scrape; body `{ "refresh": bool }` |
 | `GET` | `/api/jobs/:id` | | Scrape job status |
 | `POST` | `/api/cleanup` | | Drop stale rows |
@@ -223,6 +266,7 @@ Three tiers, each triggered on demand and each backed by Crawlee for queueing, r
 | --- | --- | --- |
 | Navigation + categories | Crawlee **Playwright** | mega-menu markup on `/en-gb` |
 | Product listings | Crawlee **HttpCrawler** | `/collections/<slug>/products.json` |
+| Product listings *(production)* | **the visitor's browser** | the same feed, read client-side |
 | Product detail | Crawlee **Playwright** | schema.org JSON-LD + `#info-*` table |
 | Related products | Crawlee **HttpCrawler** | `/recommendations/products.json` |
 
@@ -236,6 +280,54 @@ the queueing, retry and rate-limiting behaviour is identical to the browser-driv
 
 Detail pages are still scraped with a real browser, since their JSON-LD and spec table are
 server-rendered.
+
+### Scraping from the visitor's browser
+
+The deployed API cannot scrape at all. World of Books answers its datacentre address with `429` on
+every request, three retries deep, for every collection:
+
+```
+WARN  HttpCrawler: Request blocked - received 429 status code (retry 1, 2, 3)
+ERROR [CategoryScraper] Listing request failed: 429
+```
+
+The same URL returns `200` from a residential connection. The storefront is not blocking the
+scraper; it is blocking where the scraper runs. No amount of queue, memory or patience changes
+that.
+
+A visitor's browser is not blocked — and the feed is served with `access-control-allow-origin: *`,
+which is a site stating that any page may read it. So in production the fetch happens there:
+
+```
+visitor clicks a category
+  → their browser reads /collections/<slug>/products.json      (their IP, their RAM)
+  → books render, ~1s, visible in their own network tab
+  → rows are POSTed to /api/categories/<slug>/import
+  → server validates every field, stores what survives
+  → the next visitor gets them from PostgreSQL in ~200ms
+```
+
+Scraping load then scales with the number of people looking, rather than contending for one small
+instance.
+
+**Storing what a browser sends is a real decision, not a shortcut.** The server cannot verify these
+rows by re-fetching, since that is precisely what it is blocked from doing. So
+[`ImportedProductDto`](backend/src/modules/core/dto/index.ts) refuses everything it still can — URLs
+that do not point at `worldofbooks.com` and Shopify's CDN, ids that are not Shopify ids, prices no
+used book carries, batches larger than a feed page, and any field the feed has no equivalent of.
+A caller can still post a plausible book that does not exist; that is inherent in accepting client
+data, and it is why the browser is trusted only to relay a public feed and never to assert anything
+else. The refusals are covered by
+[`import-validation.spec.ts`](backend/src/modules/core/dto/import-validation.spec.ts).
+
+The client's parser deliberately mirrors the server's — same author-from-handle rule, same
+lowest-in-stock-variant price rule — so a row fetched by a browser and one fetched by the server
+describe the same book identically.
+
+**Backing off.** A `429` is aimed at the address, not the collection, so a refusal holds every
+collection back for ten minutes rather than being retried on the next page load. Without that, one
+category was refused three times in thirty seconds — how a temporary block earns a permanent one.
+An ordinary failure stays scoped to the collection that failed.
 
 ### Progressive filling and caching
 
@@ -397,22 +489,28 @@ npx ts-node scraper-smoke.ts detail   # detail + related products
 
 ## Deployment
 
-> **Not currently deployed.** No hosted URL exists yet. What follows is the procedure, not a
-> description of something already running.
+Running on free tiers throughout:
+
+| Piece | Host | Notes |
+| --- | --- | --- |
+| Frontend | **Vercel**, root directory `frontend` | [product-explorer-two.vercel.app](https://product-explorer-two.vercel.app) |
+| Backend | **Render**, Docker, root directory `backend` | 512 MB, sleeps after ~15 min idle |
+| PostgreSQL | **Neon** | Render's own free Postgres expires after 30 days |
+| Redis | **Render Key Value** | cache and queue |
 
 The backend needs PostgreSQL, Redis, and roughly 2 GB of image space for Chromium — so it wants a
-container host (Render, Railway, Fly.io) rather than a serverless function platform. The frontend
-is a standard Next.js app and suits Vercel.
+container host rather than a serverless function platform. The frontend is a standard Next.js app
+and suits Vercel.
 
 **Backend** — deploy `backend/Dockerfile`, provision managed PostgreSQL and Redis, and set:
 
 | Variable | Value |
 | --- | --- |
-| `DB_HOST` `DB_PORT` `DB_USERNAME` `DB_PASSWORD` `DB_DATABASE` | from the managed database |
-| `REDIS_HOST` `REDIS_PORT` | from the managed Redis |
+| `DATABASE_URL` | the managed database, or the discrete `DB_*` fields |
+| `REDIS_URL` | the managed Redis, or the discrete `REDIS_*` fields |
 | `PORT` | whatever the platform injects |
 | `NODE_ENV` | `production` |
-| `FRONTEND_URL` | the deployed frontend origin — this is the CORS allowlist, comma-separate for several |
+| `FRONTEND_URL` | the deployed frontend origin — this is the CORS allowlist. It must match **exactly**, and the WebSocket gateway takes a single value, so no comma-separated list if you want live progress |
 | `SCRAPE_ON_STARTUP` | `false` if you intend to seed rather than scrape on boot |
 
 `NODE_ENV=production` disables TypeORM `synchronize`, so the schema comes solely from
@@ -438,13 +536,21 @@ NEXT_PUBLIC_WS_URL=wss://<backend-host>/api/ws
 NEXT_PUBLIC_APP_URL=https://<frontend-host>
 ```
 
-Two things that will bite otherwise:
+Things that will bite otherwise, each learned the hard way here:
 
-- `FRONTEND_URL` on the backend must exactly match the deployed frontend origin, or every request
-  fails CORS.
-- Use `wss://` rather than `ws://` from an HTTPS page; browsers block mixed-content WebSockets.
+- **`FRONTEND_URL` must match the origin the browser actually sends.** Vercel serves the same build
+  on several hostnames — the production domain and a per-deployment one — and only the one in the
+  address bar counts. A mismatch shows no `access-control-allow-origin` header at all while the
+  preflight still returns `204`, which reads like the endpoint is fine.
+- **`NEXT_PUBLIC_WS_URL` must end in `/api/ws`.** The gateway declares that namespace and Socket.IO
+  reads the URL path as the namespace, so a bare host connects to `/` and is refused.
+- **`NEXT_PUBLIC_*` are baked in at build time.** Changing one requires a redeploy, not a restart.
+- **`GET /api/health` reports PostgreSQL only.** It says nothing about Redis, so it can read `OK`
+  while the cache and queue are both unreachable.
+- **A monorepo host skips deploys outside its root directory.** A frontend-only commit correctly
+  does not rebuild a backend whose root is `backend/`.
 
-Verify a deployment with `GET /api/health` (reports database connectivity) and `/api/docs`.
+Verify a deployment with `GET /api/health` and `/api/docs`.
 
 ---
 
@@ -457,4 +563,16 @@ Tracked honestly rather than implied complete:
   `useSyncExternalStore` is the right tool, and `useSearch` flips a flag inside its debounce
   timer. Real findings, deliberately left as warnings rather than rewritten blind — that
   refactor wants test coverage behind it first.
-- **Not deployed** — no hosted frontend or backend URL yet.
+- **The interactive scraper cannot run on the deployment.** It drives a real browser through
+  hover → click → scrape, and Chromium will not start in 512 MB. The live session still connects,
+  and a failed attempt now hands over to the browser-side scrape rather than dead-ending, but the
+  feature itself is only visible locally — run the backend with `HEADLESS=false` to watch it.
+- **The BullMQ queue's Redis connection does not establish in production.** Nothing on the visitor
+  path depends on it: cache and queue operations are bounded and fall through to PostgreSQL. The
+  cost is that background refreshes never run.
+- **`category.product_count` reads 0 for seeded rows.** Only a scrape populates it, and the seed
+  fixture does not. Cosmetic — the products are there and the grid shows them.
+- **Imported rows are trusted to be a faithful relay of a public feed.** Validation refuses
+  anything structurally wrong or pointed at another host, but a determined caller could still post
+  a plausible book that does not exist. Unavoidable while the server cannot re-fetch to verify;
+  the honest fix is an origin that World of Books will answer.
