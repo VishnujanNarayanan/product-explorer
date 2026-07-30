@@ -27,19 +27,58 @@ export const navigationAPI = {
 
   // Get category products (triggers scrape if needed) - same as productsAPI.getProductsByCategory
   getCategoryProducts: (slug: string, navigationSlug?: string) =>
-    api.get<{
-      message: string;
-      products: any[];
-      category?: Category;
-      jobQueued: boolean;
-    }>(`/categories/${slug}/products${navigationQuery(navigationSlug)}`),
+    api.get<CategoryProductsResponse>(
+      `/categories/${slug}/products${navigationQuery(navigationSlug)}`,
+    ),
 
-  // Trigger category scrape (POST endpoint for manual trigger)
-  scrapeCategory: (slug: string, navigationSlug?: string) =>
-    api.post<{
-      message: string;
-      products: any[];
-      category?: Category;
-      jobQueued: boolean;
-    }>(`/scrape/category/${slug}${navigationQuery(navigationSlug)}`),
+  // Trigger category scrape (POST endpoint for manual trigger). `refresh` asks the server to
+  // fetch another page during the request instead of only queueing one — which matters when
+  // the queue is not running.
+  scrapeCategory: (slug: string, navigationSlug?: string, refresh = false) =>
+    api.post<CategoryProductsResponse>(
+      `/scrape/category/${slug}${navigationQuery(navigationSlug)}`,
+      { refresh },
+    ),
+
+  /**
+   * Hands the server products this browser read from the collection feed.
+   *
+   * World of Books answers the API's datacentre address with 429 while serving a visitor's own
+   * browser normally, so the browser is the only thing here that can reach the storefront. The
+   * server validates every row before storing it — see ImportedProductDto — because nothing
+   * arriving this way can be taken on trust.
+   */
+  importScrapedProducts: (
+    slug: string,
+    products: ImportableProduct[],
+    options: { navigationSlug?: string; page?: number } = {},
+  ) =>
+    api.post<{ message: string; added: number; updated: number; total: number }>(
+      `/categories/${slug}/import${navigationQuery(options.navigationSlug)}`,
+      { products, page: options.page ?? 1 },
+    ),
 };
+
+export interface CategoryProductsResponse {
+  message: string;
+  products: any[];
+  category?: Category;
+  jobQueued: boolean;
+  /** Whether the request itself fetched from World of Books. */
+  scrapedNow?: boolean;
+  addedCount?: number;
+  total?: number;
+  /** Whether the collection has pages left — what "load more" depends on. */
+  sourceHasMore?: boolean;
+}
+
+/** The fields the import endpoint accepts; anything else is rejected. */
+export interface ImportableProduct {
+  source_id: string;
+  title: string;
+  author: string | null;
+  price: number;
+  currency: string;
+  image_url: string;
+  source_url: string;
+}

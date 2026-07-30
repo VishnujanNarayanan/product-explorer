@@ -11,7 +11,7 @@ import { useCategories } from "@/lib/hooks/useCategories"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { useInteractiveScraper } from "@/lib/hooks/useInteractiveScraper"
 import { navigationAPI } from "@/lib/api/navigation"
-import { scrapeCollectionInBrowser } from "@/lib/scrape/browser-scraper"
+import { useBrowserScrape } from "@/lib/hooks/useBrowserScrape"
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { Button } from "@/components/ui/Button"
 import { ScrapeAgainButton } from "@/components/shared/ScrapeAgainButton"
@@ -55,7 +55,17 @@ function ProductsPageContent() {
     stillWorking: wsStillWorking,
   } = useInteractiveScraper()
 
+  // Live scraping from the visitor's own browser — the only path to World of Books that works
+  // from production, since the API's address is rate-limited by the storefront.
+  const {
+    scrape: browserScrape,
+    isScraping: isBrowserScraping,
+    message: browserScrapeMessage,
+    step: browserScrapeStep,
+  } = useBrowserScrape()
+
   // State
+  const [sourceHasMore, setSourceHasMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false)
@@ -75,6 +85,11 @@ function ProductsPageContent() {
   // request fires once per category rather than on every status change.
   const liveRequestedRef = useRef<string | null>(null)
   const isWsConnectedRef = useRef(isWsConnected)
+  // Held in refs so the initialise effect can call the scraper without listing it as a
+  // dependency — it changes identity on every state update, and re-running that effect would
+  // clear the grid mid-scrape.
+  const browserScrapeRef = useRef(browserScrape)
+  const currentCategoryTitleRef = useRef<string | undefined>(undefined)
   // Category whose live attempt has already been handed over to background polling, so the
   // handover happens once per category rather than on every status update.
   const fallbackPolledRef = useRef<string | null>(null)
@@ -92,8 +107,16 @@ function ProductsPageContent() {
     isWsConnectedRef.current = isWsConnected
   }, [isWsConnected])
 
+  useEffect(() => {
+    browserScrapeRef.current = browserScrape
+  }, [browserScrape])
+
   const currentNav = navigation.find(nav => nav.slug === navigationSlug)
   const currentCategory = categories.find(cat => cat.slug === categorySlug)
+
+  useEffect(() => {
+    currentCategoryTitleRef.current = currentCategory?.title
+  }, [currentCategory])
 
   const breadcrumbItems = [
     { label: "Home", href: "/" },
@@ -208,27 +231,21 @@ function ProductsPageContent() {
         await loadProductsRef.current()
         loadedSlugRef.current = categorySlug
 
-        // Nothing stored and nothing the server could fetch — so fetch it here instead.
-        // World of Books is a Shopify storefront and serves its collections as JSON with
-        // `access-control-allow-origin: *`, which means this browser may read the same feed
-        // the server reads. Doing it here costs the server nothing and works even when the
-        // instance is too small for a headless browser or its queue is down.
-        if (lastProductCountRef.current === 0) {
-          try {
-            const live = await scrapeCollectionInBrowser(categorySlug)
+        setSourceHasMore(result.sourceHasMore ?? false)
 
-            if (live.products.length > 0) {
-              setDisplayProducts(live.products)
-              lastProductCountRef.current = live.products.length
-              toast({
-                title: `Scraped ${live.products.length} books in your browser`,
-                description: `Fetched from World of Books in ${(live.durationMs / 1000).toFixed(1)}s — open the network tab to watch it happen.`,
-              })
-            }
-          } catch (error) {
-            // Only ever an enhancement over what the server returned; if the storefront
-            // refuses this browser, the page is no worse off than before.
-            console.warn('Browser-side scrape failed, leaving the server result in place:', error)
+        // Nothing stored, so scrape it here. World of Books answers this API's datacentre
+        // address with 429 while serving a visitor's browser normally, which makes this the
+        // only path to the storefront in production — the fetch runs on their connection and
+        // the server is handed the result to keep.
+        if (lastProductCountRef.current === 0) {
+          const live = await browserScrapeRef.current(categorySlug, {
+            categoryTitle: currentCategoryTitleRef.current,
+            navigationSlug: navigationSlug || undefined,
+          })
+
+          if (live.length > 0) {
+            setDisplayProducts(live)
+            lastProductCountRef.current = live.length
           }
         }
 
@@ -373,11 +390,34 @@ function ProductsPageContent() {
   }
 
   // Handle load more
-  const handleLoadMore = () => {
-    if (!categorySlug || !isWsConnected || scraperStatus !== 'ready') return
-    
+  const handleLoadMore = async () => {
+    if (!categorySlug) return
+
     const target = currentCategory?.title || categorySlug
-    loadMore(target, categorySlug)
+
+    // The live browser session pushes results as they arrive, so prefer it when it is actually
+    // running. It needs a headless Chromium on the server, which a small instance cannot start.
+    if (isWsConnected && scraperStatus === 'ready') {
+      loadMore(target, categorySlug)
+      return
+    }
+
+    // Otherwise take the next feed page here. This is what makes "load more" work at all in
+    // production: no session, no queue, just this browser asking the storefront for page n+1.
+    const more = await browserScrape(categorySlug, {
+      categoryTitle: target,
+      navigationSlug: navigationSlug || undefined,
+      nextPage: true,
+    })
+
+    if (more.length > 0) {
+      // Appended rather than replacing: "load more" should grow the grid, and the books
+      // already on screen came from earlier pages of the same collection.
+      setDisplayProducts(prev => {
+        const seen = new Set(prev.map((product: any) => product.source_id))
+        return [...prev, ...more.filter(product => !seen.has(product.source_id))]
+      })
+    }
   }
 
   if (!categorySlug) {
@@ -401,7 +441,11 @@ function ProductsPageContent() {
   // Anything in flight: a live click, a REST load, or the background poll that follows a
   // fallback.
   const isWorking =
-    isLoadingProducts || isWsLoading || isPolling || (isWsConnected && scraperStatus === 'scraping')
+    isLoadingProducts ||
+    isWsLoading ||
+    isPolling ||
+    isBrowserScraping ||
+    (isWsConnected && scraperStatus === 'scraping')
   const hasSomethingToShow = displayProducts.length > 0
 
   // Take over the screen only when there is nothing to look at yet. Once products are on
@@ -415,7 +459,10 @@ function ProductsPageContent() {
 
   // What the system is doing, in one line. Falls back to a plain description when the live
   // session has not said anything yet.
+  // The browser's own scrape comes first: it is the one actually happening in production, and
+  // it reports each step — fetching from the storefront, then saving what came back.
   const progressLine =
+    (isBrowserScraping || browserScrapeStep === 'failed' ? browserScrapeMessage : null) ||
     (wsCategory === categorySlug ? wsStatusMessage : null) ||
     (isPolling
       ? 'Fetching from the background scrape…'
@@ -428,8 +475,13 @@ function ProductsPageContent() {
   // Kept mounted while the fetch runs — a control that disappears the moment you press it
   // makes the page jump and leaves you unsure the press registered. handleLoadMore is the
   // one that insists the session is ready.
-  const canLoadMore = isWsConnected && wsHasMore && displayProducts.length > 0
-  const isLoadingMore = isWsLoading || (isWsConnected && scraperStatus === 'scraping')
+  // Offered whenever the collection has pages left, not only when a live browser session is
+  // running — that session cannot start on a small instance, and gating the control on it hid
+  // "load more" from every visitor in production.
+  const canLoadMore =
+    displayProducts.length > 0 && ((isWsConnected && wsHasMore) || sourceHasMore)
+  const isLoadingMore =
+    isWsLoading || (isWsConnected && scraperStatus === 'scraping') || isBrowserScraping
 
   // One report, rendered at both ends of the grid.
   const categoryName = currentCategory?.title || 'this category'

@@ -79,6 +79,7 @@ describe('ScraperService inline category scrape', () => {
         count: jest.fn().mockResolvedValue(scraped.length),
       },
       degraded: { cache: false, queue: false },
+      scrapeBackoff: new Map<string, number>(),
     };
 
     for (const [key, value] of Object.entries(fields)) {
@@ -152,6 +153,75 @@ describe('ScraperService inline category scrape', () => {
 
     expect(response.jobQueued).toBe(false);
     expect(response.message).not.toContain('fully scraped');
+  });
+
+  /**
+   * World of Books rate-limits by IP and refuses this API's datacentre address. Without a
+   * backoff every page load re-attempted a scrape that had just been turned away — three
+   * attempts in thirty seconds for one category — which is how a temporary block earns itself a
+   * permanent one.
+   */
+  describe('after World of Books refuses the request', () => {
+    it('stops asking for a while rather than retrying on every page load', async () => {
+      const scrape = jest
+        .fn()
+        .mockRejectedValue(new Error('Request blocked - received 429 status code.'));
+      const { service } = makeService({ scrape });
+
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+
+      expect(scrape).toHaveBeenCalledTimes(1);
+    });
+
+    it('still answers with whatever is stored while it is backing off', async () => {
+      const scrape = jest.fn().mockRejectedValue(new Error('429'));
+      const { service } = makeService({ scrape });
+
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      const response = await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+
+      expect(response.products).toEqual([]);
+      expect(response.scrapedNow).toBe(false);
+    });
+
+    it('backs off for longer than after an ordinary failure', async () => {
+      const blocked = makeService({
+        scrape: jest.fn().mockRejectedValue(new Error('Request blocked - 429')),
+      });
+      const failed = makeService({
+        scrape: jest.fn().mockRejectedValue(new Error('socket hang up')),
+      });
+
+      await blocked.service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      await failed.service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+
+      const until = (service: object) =>
+        (service as { scrapeBackoff: Map<string, number> }).scrapeBackoff.get(
+          'author-books-by-agatha-christie',
+        )!;
+
+      expect(until(blocked.service)).toBeGreaterThan(until(failed.service));
+    });
+
+    it('resumes once a scrape succeeds again', async () => {
+      const scrape = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('429'))
+        .mockResolvedValue(result);
+      const { service } = makeService({ scrape });
+
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      // Past the backoff window.
+      (service as unknown as { scrapeBackoff: Map<string, number> }).scrapeBackoff.clear();
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+
+      expect(scrape).toHaveBeenCalledTimes(2);
+      expect(
+        (service as unknown as { scrapeBackoff: Map<string, number> }).scrapeBackoff.size,
+      ).toBe(0);
+    });
   });
 
   it('marks the category exhausted when the feed says the collection has ended', async () => {
