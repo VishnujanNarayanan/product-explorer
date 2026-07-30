@@ -21,7 +21,18 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openSection, setOpenSection] = useState<string | null>(null)
 
-  // A route change means the menu did its job.
+  /**
+   * A route change means the menu did its job — but only a change of *path*. Every category
+   * lives at /products and differs by query string, which `usePathname` does not report, so
+   * picking a second category from an open menu left it open on top of the books it had just
+   * fetched. Closing it where the choice is made covers that; this stays for the back button
+   * and anything else that navigates without a click in here.
+   */
+  const closeMenu = () => {
+    setMobileMenuOpen(false)
+    setOpenSection(null)
+  }
+
   useEffect(() => {
     setMobileMenuOpen(false)
     setOpenSection(null)
@@ -90,6 +101,7 @@ export function Header() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={closeMenu}
                   className={`text-sm ${
                     pathname === link.href ? "text-foreground" : "text-muted-foreground"
                   }`}
@@ -129,6 +141,7 @@ export function Header() {
                           <Link
                             key={`${section.slug}-${category.id}`}
                             href={`/products?category=${category.slug}&navigation=${section.slug}`}
+                            onClick={closeMenu}
                             className="flex items-baseline justify-between gap-3 border-l-2 border-transparent py-2 pl-3 text-sm text-muted-foreground hover:border-highlight hover:text-foreground"
                           >
                             <span className="truncate">{category.title}</span>
@@ -141,6 +154,7 @@ export function Header() {
                         ))}
                         <Link
                           href={`/categories?navigation=${section.slug}`}
+                          onClick={closeMenu}
                           className="mt-1 inline-block pl-3 text-sm font-medium text-primary"
                         >
                           Browse the whole section
