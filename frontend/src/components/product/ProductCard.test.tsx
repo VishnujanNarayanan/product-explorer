@@ -59,11 +59,34 @@ describe('ProductCard', () => {
   it('links to the product detail page by source id', () => {
     render(<ProductCard product={makeProduct()} />);
 
-    const links = screen.getAllByRole('link');
-    expect(links.length).toBeGreaterThan(0);
-    links.forEach((link) =>
-      expect(link).toHaveAttribute('href', '/products/9846944432401'),
+    expect(screen.getByRole('link', { name: /A Court of Thorns and Roses/ })).toHaveAttribute(
+      'href',
+      '/products/9846944432401',
     );
+  });
+
+  /**
+   * A card also has to be useful for a book we do not hold a detail row for — one scraped into
+   * the grid by the visitor's browser a moment ago has nowhere to go until it is stored, and
+   * opening it returns a 404.
+   */
+  it('offers a way through to the book on World of Books', () => {
+    render(<ProductCard product={makeProduct()} />);
+
+    const outbound = screen.getByRole('link', { name: /Buy on World of Books/i });
+    expect(outbound).toHaveAttribute(
+      'href',
+      'https://www.worldofbooks.com/en-gb/products/court-of-thorns-and-roses-book-sarah-j-maas',
+    );
+    // Leaving the app should not replace it, and a new tab must not keep a handle on this one.
+    expect(outbound).toHaveAttribute('target', '_blank');
+    expect(outbound).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('omits the outbound link when the product has no source URL', () => {
+    render(<ProductCard product={{ ...makeProduct(), source_url: '' }} />);
+
+    expect(screen.queryByRole('link', { name: /Buy on World of Books/i })).not.toBeInTheDocument();
   });
 
   // Accessibility baseline: an image conveying content needs a meaningful alt.

@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { RefreshCw, ImageOff } from "lucide-react"
+import { RefreshCw, ImageOff, ExternalLink } from "lucide-react"
 import { Product } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -111,6 +111,23 @@ export function ProductCard({
           <p className="mt-auto pt-3 font-mono text-sm font-medium text-highlight">
             £{product.price}
           </p>
+        )}
+
+        {/* Always reachable at the source, whether or not we hold a detail row for it — a book
+            scraped into the grid a moment ago has somewhere to go before anyone has stored it.
+            z-20 lifts it above the title's full-card overlay link, which would swallow the
+            click otherwise. */}
+        {product.source_url && (
+          <a
+            href={product.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-20 mt-3 inline-flex items-center gap-1.5 self-start border-b border-transparent text-xs text-muted-foreground transition-colors hover:border-current hover:text-foreground"
+          >
+            Buy on World of Books
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          </a>
         )}
       </div>
     </article>

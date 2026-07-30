@@ -44,15 +44,26 @@ describe('ScraperService inline category scrape', () => {
   }) {
     const service = Object.create(ScraperService.prototype) as ScraperService;
     const warn = jest.fn();
-    const category = {
-      id: 7,
-      slug: 'author-books-by-agatha-christie',
-      is_exhausted: false,
-      last_page_scraped: 0,
-      product_count: 0,
-      navigation: null,
-      ...options.category,
+
+    // One row per slug asked for. A single shared object made two different collections look
+    // like the same one, which hid whether a backoff was scoped to a category or to the host.
+    const rows = new Map<string, Record<string, unknown>>();
+    const rowFor = (slug: string) => {
+      if (!rows.has(slug)) {
+        rows.set(slug, {
+          id: rows.size + 7,
+          slug,
+          is_exhausted: false,
+          last_page_scraped: 0,
+          product_count: 0,
+          navigation: null,
+          ...options.category,
+        });
+      }
+      return rows.get(slug)!;
     };
+
+    const category = rowFor('author-books-by-agatha-christie');
 
     const findAndCount = jest.fn();
     for (const read of options.reads ?? [[[], 0]]) findAndCount.mockResolvedValueOnce(read);
@@ -70,7 +81,12 @@ describe('ScraperService inline category scrape', () => {
         del: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
       },
       scrapingQueue: { add: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) },
-      categoryRepo: { findOne: jest.fn().mockResolvedValue(category), save: jest.fn() },
+      categoryRepo: {
+        findOne: jest.fn((query: { where?: { slug?: string } }) =>
+          Promise.resolve(rowFor(query?.where?.slug ?? 'author-books-by-agatha-christie')),
+        ),
+        save: jest.fn(),
+      },
       productRepo: {
         findAndCount,
         findOne: jest.fn().mockResolvedValue(null),
@@ -80,6 +96,7 @@ describe('ScraperService inline category scrape', () => {
       },
       degraded: { cache: false, queue: false },
       scrapeBackoff: new Map<string, number>(),
+      blockedUntil: 0,
     };
 
     for (const [key, value] of Object.entries(fields)) {
@@ -205,6 +222,32 @@ describe('ScraperService inline category scrape', () => {
       expect(until(blocked.service)).toBeGreaterThan(until(failed.service));
     });
 
+    /**
+     * A 429 is aimed at the address, not the collection. Backing off only the category asked
+     * for meant every other one queued up its own refused request — one per category a visitor
+     * opened, which is exactly what the production logs showed.
+     */
+    it('holds every collection back, not just the one that was refused', async () => {
+      const scrape = jest.fn().mockRejectedValue(new Error('Request blocked - 429'));
+      const { service } = makeService({ scrape });
+
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      await service.scrapeCategoryBySlug('some-other-collection');
+      await service.scrapeCategoryBySlug('a-third-collection');
+
+      expect(scrape).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an ordinary failure scoped to the collection that failed', async () => {
+      const scrape = jest.fn().mockRejectedValue(new Error('socket hang up'));
+      const { service } = makeService({ scrape });
+
+      await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
+      await service.scrapeCategoryBySlug('some-other-collection');
+
+      expect(scrape).toHaveBeenCalledTimes(2);
+    });
+
     it('resumes once a scrape succeeds again', async () => {
       const scrape = jest
         .fn()
@@ -213,8 +256,13 @@ describe('ScraperService inline category scrape', () => {
       const { service } = makeService({ scrape });
 
       await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
-      // Past the backoff window.
-      (service as unknown as { scrapeBackoff: Map<string, number> }).scrapeBackoff.clear();
+      // Past both backoff windows: the collection's own, and the one covering the host.
+      const state = service as unknown as {
+        scrapeBackoff: Map<string, number>;
+        blockedUntil: number;
+      };
+      state.scrapeBackoff.clear();
+      state.blockedUntil = 0;
       await service.scrapeCategoryBySlug('author-books-by-agatha-christie');
 
       expect(scrape).toHaveBeenCalledTimes(2);

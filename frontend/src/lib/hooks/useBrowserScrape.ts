@@ -93,30 +93,34 @@ export function useBrowserScrape() {
           error: null,
         })
 
-        // Storing is a bonus: the visitor already has their books. If the server rejects the
-        // payload or is asleep, say so quietly rather than turning a successful scrape into an
-        // error on screen.
+        // Storing is a bonus: the visitor already has their books, so a rejected payload or a
+        // sleeping server must not turn a successful scrape into an error on screen. It does
+        // have to be visible though — swallowing it into a console warning is why books were
+        // appearing in the grid and then 404ing when opened, with nothing on screen or in the
+        // logs to say the catalogue had never received them.
         let savedCount: number | null = null
+        let saveError: string | null = null
         try {
           const saved = await navigationAPI.importScrapedProducts(slug, result.products, {
             navigationSlug: options.navigationSlug,
             page,
           })
           savedCount = saved.added
-        } catch (error) {
+        } catch (error: any) {
+          saveError =
+            error?.userMessage ?? error?.response?.data?.message ?? error?.message ?? "unknown error"
           console.warn("Scraped books could not be saved to the catalogue:", error)
         }
 
         setState({
           step: "done",
-          message:
-            savedCount === null
-              ? `Scraped ${result.products.length} books in your browser.`
-              : `Scraped ${result.products.length} books in your browser and saved ${savedCount} to the catalogue.`,
+          message: saveError
+            ? `Scraped ${result.products.length} books in your browser. They could not be saved (${saveError}), so opening one will not show its detail page.`
+            : `Scraped ${result.products.length} books in your browser and saved ${savedCount} to the catalogue.`,
           products: result.products,
           durationMs: result.durationMs,
           savedCount,
-          error: null,
+          error: saveError,
         })
 
         return result.products
