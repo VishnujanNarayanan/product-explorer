@@ -55,6 +55,72 @@ export class ScraperService implements OnModuleInit {
   ) {}
 
   /**
+   * Redis holds a cache and a job queue — two optimisations. Neither is allowed to fail a
+   * request that Postgres can answer on its own, which is every read below: the products are
+   * already stored, and the cache only saves a query.
+   *
+   * The timeout matters as much as the catch. A Redis client keeps an offline queue by
+   * default, accepting commands while disconnected and resolving them if it ever reconnects,
+   * so awaiting one during an outage is unbounded — a browse of stored data hung for 90
+   * seconds and then 500'd, which is how this was found.
+   */
+  private static readonly REDIS_TIMEOUT_MS = 2000;
+
+  /** Logged on transition rather than per request, or an outage floods the log. */
+  private redisDegraded = false;
+
+  private async bounded<T>(operation: string, work: () => Promise<T>): Promise<T | undefined> {
+    let timer: NodeJS.Timeout | undefined;
+
+    try {
+      const result = await Promise.race([
+        work(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`timed out after ${ScraperService.REDIS_TIMEOUT_MS}ms`)),
+            ScraperService.REDIS_TIMEOUT_MS,
+          );
+        }),
+      ]);
+
+      if (this.redisDegraded) {
+        this.redisDegraded = false;
+        this.logger.log('Redis is reachable again');
+      }
+      return result;
+    } catch (error) {
+      if (!this.redisDegraded) {
+        this.redisDegraded = true;
+        this.logger.warn(
+          `Redis unavailable (${operation}: ${error.message}) — serving from Postgres, ` +
+            'and background scrapes are not being queued, until it recovers',
+        );
+      }
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private cacheGet<T>(key: string): Promise<T | undefined> {
+    return this.bounded(`get ${key}`, () => this.cacheManager.get<T>(key));
+  }
+
+  private async cacheSet(key: string, value: unknown, ttlMs: number): Promise<void> {
+    await this.bounded(`set ${key}`, () => this.cacheManager.set(key, value, ttlMs));
+  }
+
+  private async cacheDel(key: string): Promise<void> {
+    await this.bounded(`del ${key}`, () => this.cacheManager.del(key));
+  }
+
+  /** Whether the job actually reached the queue, so a caller can report what it really did. */
+  private async enqueue(name: string, payload: Record<string, unknown>): Promise<boolean> {
+    const job = await this.bounded(`enqueue ${name}`, () => this.scrapingQueue.add(name, payload));
+    return job !== undefined;
+  }
+
+  /**
    * Fill the navigation tree on first boot, so a fresh install is not empty.
    *
    * Deliberately best-effort. This used to `await` the scrape unguarded, which meant a failure
@@ -87,11 +153,11 @@ export class ScraperService implements OnModuleInit {
 
   async scrapeAndSaveNavigation(): Promise<Navigation[]> {
     const cacheKey = 'navigation_data';
-    const cached = await this.cacheManager.get(cacheKey);
-    
+    const cached = await this.cacheGet<Navigation[]>(cacheKey);
+
     if (cached) {
       this.logger.log('Returning cached navigation data');
-      return cached as Navigation[];
+      return cached;
     }
 
     try {
@@ -165,7 +231,7 @@ export class ScraperService implements OnModuleInit {
       // Never cache an empty result. A failed scrape used to be cached as valid, so every
       // retry within the TTL returned "cached" zero items and looked like a broken scraper.
       if (savedNavigation.length > 0) {
-        await this.cacheManager.set(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
+        await this.cacheSet(cacheKey, savedNavigation, 24 * 60 * 60 * 1000);
       } else {
         this.logger.warn('Navigation scrape returned no items — not caching');
       }
@@ -175,7 +241,7 @@ export class ScraperService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Navigation scraping failed: ${error.message}`);
       // Drop any stale entry so the next call retries instead of serving a bad cache hit.
-      await this.cacheManager.del(cacheKey).catch(() => undefined);
+      await this.cacheDel(cacheKey);
       throw error;
     }
   }
@@ -201,7 +267,7 @@ export class ScraperService implements OnModuleInit {
     // too — the same slug under two headings is two categories with two product lists.
     const navigationSlug = options.navigationSlug;
     const cacheKey = `category_${navigationSlug ?? '_'}_${slug}_p${page}_l${limit}`;
-    const cached = await this.cacheManager.get<{
+    const cached = await this.cacheGet<{
       products: Product[];
       category?: Category;
       total: number;
@@ -236,15 +302,17 @@ export class ScraperService implements OnModuleInit {
 
     // Queue another page only while the collection still has one. Fully-scraped categories
     // are served from the DB, so browsing them costs World of Books nothing.
-    const jobQueued = !category.is_exhausted;
-    if (jobQueued) {
-      await this.scrapingQueue.add('scrape-category', {
-        categorySlug: slug,
-        categoryId: category.id,
-        navigationSlug: category.navigation?.slug || null,
-        url: this.collectionUrl(slug),
-      });
-    }
+    // Reports what actually happened rather than what was intended: with the queue
+    // unreachable, claiming a job was queued would promise the client an update that is
+    // never coming.
+    const jobQueued = category.is_exhausted
+      ? false
+      : await this.enqueue('scrape-category', {
+          categorySlug: slug,
+          categoryId: category.id,
+          navigationSlug: category.navigation?.slug || null,
+          url: this.collectionUrl(slug),
+        });
 
     const [products, total] = await this.productRepo.findAndCount({
       where: { category: { id: category.id } },
@@ -255,7 +323,7 @@ export class ScraperService implements OnModuleInit {
     });
 
     if (products.length > 0) {
-      await this.cacheManager.set(cacheKey, { products, category, total }, 60 * 60 * 1000);
+      await this.cacheSet(cacheKey, { products, category, total }, 60 * 60 * 1000);
     }
 
     return {
@@ -280,7 +348,7 @@ export class ScraperService implements OnModuleInit {
     const cacheKey = `product_${sourceId}`;
     
     if (!forceRefresh) {
-      const cached = await this.cacheManager.get<Product>(cacheKey);
+      const cached = await this.cacheGet<Product>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -302,14 +370,14 @@ export class ScraperService implements OnModuleInit {
       }
 
       if (forceRefresh || !product.detail) {
-        await this.scrapingQueue.add('scrape-product-detail', {
+        await this.enqueue('scrape-product-detail', {
           productId: product.id,
           url: product.source_url,
           sourceId: product.source_id,
         });
       }
 
-      await this.cacheManager.set(cacheKey, product, 24 * 60 * 60 * 1000);
+      await this.cacheSet(cacheKey, product, 24 * 60 * 60 * 1000);
       
       return product;
     } catch (error) {

@@ -72,6 +72,10 @@ import { ViewHistory } from '../../entities/view-history.entity';
         // reads `url` and silently ignores loose host/port keys — so the old shape connected to
         // localhost no matter what REDIS_HOST said, and could only ever work in development.
         url: redisConnectionUrl(),
+        // Without this, node-redis accepts commands while disconnected and holds them until it
+        // reconnects, so a cache read during an outage never settles. Failing immediately is
+        // the right behaviour for a cache: the caller falls back to Postgres.
+        disableOfflineQueue: true,
         ttl: parseInt(process.env.CACHE_TTL || '86400'), // 24 hours
         max: 1000, // Maximum number of items in cache
       }),

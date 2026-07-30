@@ -565,20 +565,30 @@ export class ScraperSessionService implements OnModuleDestroy {
     this.logger.log(`Cached ${products.length} products for ${categorySlug}`);
   }
 
+  /**
+   * Opportunistic prefetching of neighbouring categories, and nothing the caller is waiting
+   * on. It is called immediately after a successful live scrape, so a failure here — an
+   * unreachable Redis being the likely one — must not turn that success into an error and
+   * throw away products already saved to Postgres.
+   */
   private async queueBackgroundRefresh(currentCategorySlug: string): Promise<void> {
-    // Get all other categories
-    const allCategories = await this.categoryRepo.find({
-      where: { slug: Not(currentCategorySlug) },
-      take: 10,
-    });
-    
-    for (const category of allCategories) {
-      await this.backgroundQueue.add('refresh-stale', {
-        type: 'refresh-stale',
-        target: category.slug,
-        priority: 'low',
-        triggeredBy: 'user-interaction',
+    try {
+      // Get all other categories
+      const allCategories = await this.categoryRepo.find({
+        where: { slug: Not(currentCategorySlug) },
+        take: 10,
       });
+
+      for (const category of allCategories) {
+        await this.backgroundQueue.add('refresh-stale', {
+          type: 'refresh-stale',
+          target: category.slug,
+          priority: 'low',
+          triggeredBy: 'user-interaction',
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Could not queue background refresh: ${error.message}`);
     }
   }
 
