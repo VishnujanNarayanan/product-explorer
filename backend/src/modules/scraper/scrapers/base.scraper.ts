@@ -28,6 +28,28 @@ export abstract class BaseScraper {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   protected readonly MAX_RETRIES = parseInt(process.env.SCRAPE_RETRY_COUNT || '3');
 
+  /**
+   * Browsers run headless unless HEADLESS=false. Watching a scrape in a real window is the
+   * quickest way to tell a selector change apart from a network failure, since a headless
+   * timeout looks identical either way.
+   *
+   * Only the stages that need a browser are affected. Category listings go through
+   * HttpCrawler against the Shopify JSON feed and never launch one.
+   */
+  protected readonly HEADLESS = process.env.HEADLESS !== 'false';
+
+  /**
+   * Pins the window when running headed, so it lands somewhere predictable instead of
+   * wherever Chromium decides. Empty while headless, where window geometry is meaningless.
+   */
+  protected get browserWindowArgs(): string[] {
+    if (this.HEADLESS) return [];
+    return [
+      `--window-position=${process.env.BROWSER_WINDOW_POSITION || '0,0'}`,
+      `--window-size=${process.env.BROWSER_WINDOW_SIZE || '960,1040'}`,
+    ];
+  }
+
   /** Locale-qualified site root, e.g. https://www.worldofbooks.com/en-gb */
   protected get siteRoot(): string {
     return `${this.BASE_URL}${this.LOCALE}`;

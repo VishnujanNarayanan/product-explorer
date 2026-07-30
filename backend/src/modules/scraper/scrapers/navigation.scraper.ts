@@ -60,7 +60,7 @@ export class NavigationScraper extends BaseScraper {
       requestHandlerTimeoutSecs: 90,
       maxRequestRetries: this.MAX_RETRIES,
       launchContext: {
-        launchOptions: { headless: true },
+        launchOptions: { headless: this.HEADLESS, args: this.browserWindowArgs },
         userAgent: this.USER_AGENT,
       },
       preNavigationHooks: [
