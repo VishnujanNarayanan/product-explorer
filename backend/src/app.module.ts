@@ -15,6 +15,7 @@ import { ViewHistory } from './entities/view-history.entity';
 import { CoreModule } from './modules/core/core.module';
 import { ProductsModule } from './modules/products/products.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
+import { postgresConnection, redisConnection } from './config/connection.config';
 
 @Module({
   imports: [
@@ -24,12 +25,7 @@ import { ScraperModule } from './modules/scraper/scraper.module';
       envFilePath: ['.env', '../.env'],
     }),
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      username: process.env.DB_USERNAME || 'admin',
-      password: process.env.DB_PASSWORD || 'password',
-      database: process.env.DB_DATABASE || 'wob_explorer',
+      ...postgresConnection(),
       entities: [
         Navigation,
         Category,
@@ -44,10 +40,7 @@ import { ScraperModule } from './modules/scraper/scraper.module';
       logging: process.env.NODE_ENV === 'development',
     }),
     BullModule.forRoot({
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-      },
+      redis: redisConnection(),
     }),
     CoreModule,
     // Was never registered, so GET /api/products returned 404 for every caller — including

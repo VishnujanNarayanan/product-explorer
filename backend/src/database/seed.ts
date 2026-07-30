@@ -24,6 +24,7 @@ import { ProductDetail } from '../entities/product-detail.entity';
 // Product declares a `reviews` relation, so Review has to be registered even though the seed
 // never writes one.
 import { Review } from '../entities/review.entity';
+import { postgresConnection } from '../config/connection.config';
 
 // The backend reads .env from the repository root, one level above backend/.
 config({ path: join(__dirname, '..', '..', '..', '.env') });
@@ -72,12 +73,7 @@ function loadFixture(): Fixture {
 
 function createDataSource(): DataSource {
   return new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USERNAME || 'admin',
-    password: process.env.DB_PASSWORD || 'password',
-    database: process.env.DB_DATABASE || 'wob_explorer',
+    ...postgresConnection(),
     entities: [Navigation, Category, Product, ProductDetail, Review],
     synchronize: false,
     logging: false,

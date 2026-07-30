@@ -15,6 +15,7 @@ import { ProductScraper } from './scrapers/product.scraper';
 import { ProductDetailScraper } from './scrapers/product-detail.scraper';
 import { InteractiveScraper } from './scrapers/interactive.scraper';
 import { WebSocketGateway } from '../../websocket/websocket.gateway';
+import { redisConnection, redisConnectionUrl } from '../../config/connection.config';
 
 import { Navigation } from '../../entities/navigation.entity';
 import { Category } from '../../entities/category.entity';
@@ -39,10 +40,7 @@ import { ViewHistory } from '../../entities/view-history.entity';
     ]),
     BullModule.registerQueue({
       name: 'scraping',
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-      },
+      redis: redisConnection(),
       defaultJobOptions: {
         removeOnComplete: true,
         removeOnFail: false,
@@ -55,10 +53,7 @@ import { ViewHistory } from '../../entities/view-history.entity';
     }),
     BullModule.registerQueue({
       name: 'background-scraping',
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-      },
+      redis: redisConnection(),
       defaultJobOptions: {
         removeOnComplete: true,
         removeOnFail: false,
@@ -73,8 +68,10 @@ import { ViewHistory } from '../../entities/view-history.entity';
     CacheModule.registerAsync({
       useFactory: async () => ({
         store: redisStore,
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
+        // A URL, not host/port: this store passes its config straight to node-redis v4, which
+        // reads `url` and silently ignores loose host/port keys — so the old shape connected to
+        // localhost no matter what REDIS_HOST said, and could only ever work in development.
+        url: redisConnectionUrl(),
         ttl: parseInt(process.env.CACHE_TTL || '86400'), // 24 hours
         max: 1000, // Maximum number of items in cache
       }),

@@ -8,8 +8,9 @@ const nextConfig = {
     root: __dirname,
   },
   // Emits .next/standalone: a self-contained server with only the node_modules it actually
-  // needs, so the runtime image does not have to carry a full dependency tree.
-  output: 'standalone',
+  // needs, so the runtime image does not have to carry a full dependency tree. Vercel builds
+  // its own serverless output and has no use for it, so leave the setting off there.
+  output: process.env.VERCEL ? undefined : 'standalone',
   images: {
     remotePatterns: [
       {
