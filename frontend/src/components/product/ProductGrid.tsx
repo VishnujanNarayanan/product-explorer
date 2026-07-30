@@ -25,7 +25,7 @@ export function ProductGrid({
         {title && (
           <h2 className="text-2xl font-bold">{title}</h2>
         )}
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-3 gap-3 sm:gap-5 xl:grid-cols-4 2xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="overflow-hidden rounded-lg border">
               <div className="skeleton aspect-[3/4] rounded-none" />
@@ -53,7 +53,7 @@ export function ProductGrid({
       {title && (
         <h2 className="mb-6 font-display text-2xl font-semibold">{title}</h2>
       )}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="grid grid-cols-3 gap-3 sm:gap-5 xl:grid-cols-4 2xl:grid-cols-5">
         {products.map((product, index) => (
           // Live results arrive from the scraper before they have a database id, and the
           // same source_id legitimately appears under two categories, so neither field is

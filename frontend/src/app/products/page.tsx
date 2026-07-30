@@ -671,7 +671,7 @@ function ProductsPageContent() {
                 </div>
               </div>
 
-              <div className="grid gap-5 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-3 gap-3 sm:gap-5 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="overflow-hidden rounded-lg border">
                     <div className="skeleton aspect-[3/4] rounded-none" />
