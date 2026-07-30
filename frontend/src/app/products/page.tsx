@@ -308,20 +308,31 @@ function ProductsPageContent() {
     clickCategory(currentCategory?.title || categorySlug, categorySlug, navigationSlug || undefined)
   }, [categorySlug, navigationSlug, isWsConnected, scraperStatus, currentCategory, clickCategory])
 
-  // When the live attempt ends on stored data, the queued listing scrape is still running —
-  // it is what made "wait a while, or hit Refresh" work. Poll for it instead of leaving the
-  // grid frozen on a message the user has to act on themselves.
+  // The live session drives a headless browser on the server, which a small instance cannot
+  // start — so on this deployment it ends on stored data or an error every time. It used to
+  // hand over to polling, waiting on a queued scrape that needs both a worker and an address
+  // World of Books will answer; here it is neither. Take the feed in this browser instead,
+  // which is the one path that does work.
   useEffect(() => {
-    if (!categorySlug || wsSource !== 'stored' || !wsStillWorking) return
+    if (!categorySlug) return
     // The outcome has to belong to the category on screen: switching categories leaves the
-    // previous result in state for a moment, and polling on that would report the wrong
-    // category as still fetching.
+    // previous result in state for a moment, and acting on it would scrape the wrong one.
     if (wsCategory !== categorySlug) return
+    if (wsSource !== 'stored' && scraperStatus !== 'error') return
     if (fallbackPolledRef.current === categorySlug) return
 
     fallbackPolledRef.current = categorySlug
-    startPollingRef.current?.()
-  }, [categorySlug, wsCategory, wsSource, wsStillWorking])
+
+    browserScrapeRef.current(categorySlug, {
+      categoryTitle: currentCategoryTitleRef.current,
+      navigationSlug: navigationSlug || undefined,
+    }).then(scraped => {
+      if (scraped.length > 0) {
+        setDisplayProducts(scraped)
+        setLiveSlug(categorySlug)
+      }
+    })
+  }, [categorySlug, navigationSlug, wsCategory, wsSource, wsStillWorking, scraperStatus])
 
   // Handle category change. Every click is a request for fresh data — including clicking
   // the category already open, which is how you ask for a re-scrape.
@@ -402,6 +413,22 @@ function ProductsPageContent() {
       })
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  // Scrape this category here and now, bypassing the live session entirely. Offered where
+  // that session has already had its turn and produced nothing.
+  const handleScrapeHere = async () => {
+    if (!categorySlug) return
+
+    const scraped = await browserScrape(categorySlug, {
+      categoryTitle: currentCategory?.title || categorySlug,
+      navigationSlug: navigationSlug || undefined,
+    })
+
+    if (scraped.length > 0) {
+      setDisplayProducts(scraped)
+      setLiveSlug(categorySlug)
     }
   }
 
@@ -654,14 +681,17 @@ function ProductsPageContent() {
           {/* Empty State */}
           {showEmptyState && (
             <div className="rounded-lg border border-dashed p-12 text-center">
-              <p className="font-medium">The scrape came back empty</p>
+              <p className="font-medium">No books came back for this category</p>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                World of Books returned no books for this category. Asking again sometimes
-                helps — the listing is paged and the first page can be empty.
+                World of Books returned nothing for it. Asking again sometimes helps — the
+                listing is paged, and the first page can be empty.
               </p>
-              <Button onClick={handleRefresh} className="mt-6" variant="outline">
+              {/* Deliberately not handleRefresh, which prefers the live browser session: the
+                  empty state is mostly reached because that session could not deliver, and
+                  offering the same route again is offering the thing that just failed. */}
+              <Button onClick={handleScrapeHere} className="mt-6" variant="outline">
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Ask again
+                Scrape it in my browser
               </Button>
             </div>
           )}
