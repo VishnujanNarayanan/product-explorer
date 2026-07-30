@@ -16,7 +16,7 @@ export interface RedisConnection {
   username?: string;
   password?: string;
   db?: number;
-  tls?: { rejectUnauthorized: boolean };
+  tls?: { servername: string; rejectUnauthorized: boolean };
 }
 
 /**
@@ -114,6 +114,12 @@ export function postgresConnection(): {
 /**
  * Discrete fields, for Bull — which drives ioredis and wants an options object rather than a URL.
  * A `rediss://` scheme or `REDIS_TLS` turns on TLS; Upstash and Aiven require it.
+ *
+ * `servername` is not optional in practice. A URL-configured client derives the SNI name from
+ * the URL, but options built by hand carry none, and a managed endpoint that fronts many
+ * tenants on one address cannot pick a certificate without it — the handshake then simply never
+ * completes. Render's external endpoint behaves exactly that way: the cache connected over its
+ * URL while the queue, configured from these fields, timed out on every command.
  */
 export function redisConnection(): RedisConnection {
   const url = process.env.REDIS_URL;
@@ -131,17 +137,18 @@ export function redisConnection(): RedisConnection {
       ...(parsed.username ? { username: decodeURIComponent(parsed.username) } : {}),
       ...(parsed.password ? { password: decodeURIComponent(parsed.password) } : {}),
       ...(Number.isNaN(db) || db === 0 ? {} : { db }),
-      ...(tls ? { tls: { rejectUnauthorized: false } } : {}),
+      ...(tls ? { tls: { servername: parsed.hostname, rejectUnauthorized: false } } : {}),
     };
   }
 
   const tls = isTrue(process.env.REDIS_TLS);
+  const host = process.env.REDIS_HOST || 'localhost';
   return {
-    host: process.env.REDIS_HOST || 'localhost',
+    host,
     port: parseInt(process.env.REDIS_PORT || '6379'),
     ...(process.env.REDIS_USERNAME ? { username: process.env.REDIS_USERNAME } : {}),
     ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
-    ...(tls ? { tls: { rejectUnauthorized: false } } : {}),
+    ...(tls ? { tls: { servername: host, rejectUnauthorized: false } } : {}),
   };
 }
 

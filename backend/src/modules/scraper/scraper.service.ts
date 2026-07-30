@@ -66,10 +66,29 @@ export class ScraperService implements OnModuleInit {
    */
   private static readonly REDIS_TIMEOUT_MS = 2000;
 
-  /** Logged on transition rather than per request, or an outage floods the log. */
-  private redisDegraded = false;
+  /**
+   * Health is tracked per client, not per Redis. The cache and the queue hold separate
+   * connections that can fail independently — and did: over a TLS endpoint the cache stayed up
+   * while the queue could not complete a handshake. A single shared flag made the two clients
+   * take turns announcing an outage and a recovery that neither had had.
+   *
+   * Logged on transition rather than per request, or an outage floods the log.
+   */
+  private readonly degraded: Record<'cache' | 'queue', boolean> = {
+    cache: false,
+    queue: false,
+  };
 
-  private async bounded<T>(operation: string, work: () => Promise<T>): Promise<T | undefined> {
+  private static readonly CONSEQUENCE: Record<'cache' | 'queue', string> = {
+    cache: 'serving from Postgres until it recovers',
+    queue: 'background scrapes are not being queued until it recovers',
+  };
+
+  private async bounded<T>(
+    client: 'cache' | 'queue',
+    operation: string,
+    work: () => Promise<T>,
+  ): Promise<T | undefined> {
     let timer: NodeJS.Timeout | undefined;
 
     try {
@@ -83,17 +102,17 @@ export class ScraperService implements OnModuleInit {
         }),
       ]);
 
-      if (this.redisDegraded) {
-        this.redisDegraded = false;
-        this.logger.log('Redis is reachable again');
+      if (this.degraded[client]) {
+        this.degraded[client] = false;
+        this.logger.log(`Redis ${client} is reachable again`);
       }
       return result;
     } catch (error) {
-      if (!this.redisDegraded) {
-        this.redisDegraded = true;
+      if (!this.degraded[client]) {
+        this.degraded[client] = true;
         this.logger.warn(
-          `Redis unavailable (${operation}: ${error.message}) — serving from Postgres, ` +
-            'and background scrapes are not being queued, until it recovers',
+          `Redis ${client} unavailable (${operation}: ${error.message}) — ` +
+            ScraperService.CONSEQUENCE[client],
         );
       }
       return undefined;
@@ -103,20 +122,22 @@ export class ScraperService implements OnModuleInit {
   }
 
   private cacheGet<T>(key: string): Promise<T | undefined> {
-    return this.bounded(`get ${key}`, () => this.cacheManager.get<T>(key));
+    return this.bounded('cache', `get ${key}`, () => this.cacheManager.get<T>(key));
   }
 
   private async cacheSet(key: string, value: unknown, ttlMs: number): Promise<void> {
-    await this.bounded(`set ${key}`, () => this.cacheManager.set(key, value, ttlMs));
+    await this.bounded('cache', `set ${key}`, () => this.cacheManager.set(key, value, ttlMs));
   }
 
   private async cacheDel(key: string): Promise<void> {
-    await this.bounded(`del ${key}`, () => this.cacheManager.del(key));
+    await this.bounded('cache', `del ${key}`, () => this.cacheManager.del(key));
   }
 
   /** Whether the job actually reached the queue, so a caller can report what it really did. */
   private async enqueue(name: string, payload: Record<string, unknown>): Promise<boolean> {
-    const job = await this.bounded(`enqueue ${name}`, () => this.scrapingQueue.add(name, payload));
+    const job = await this.bounded('queue', `enqueue ${name}`, () =>
+      this.scrapingQueue.add(name, payload),
+    );
     return job !== undefined;
   }
 
