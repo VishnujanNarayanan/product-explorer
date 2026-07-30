@@ -9,7 +9,7 @@ import type { Cache } from 'cache-manager';
 import { In, Not } from 'typeorm';
 
 import { NavigationScraper } from './scrapers/navigation.scraper';
-import { CategoryScraper } from './scrapers/category.scraper';
+import { CategoryScraper, CategoryScrapeResult } from './scrapers/category.scraper';
 import { ProductScraper } from './scrapers/product.scraper';
 import { ProductDetailScraper } from './scrapers/product-detail.scraper';
 
@@ -67,6 +67,28 @@ export class ScraperService implements OnModuleInit {
   private static readonly REDIS_TIMEOUT_MS = 2000;
 
   /**
+   * Budget for a listing scrape performed inside a request. The scraper reads Shopify's
+   * products.json over HTTP, which takes a second or two plus the politeness delay, and the
+   * browser client gives up at 30s — so this leaves room to return stored data either way.
+   */
+  private static readonly INLINE_SCRAPE_TIMEOUT_MS = 20000;
+
+  /** Rejects if `work` has not settled in time, without leaving a timer behind. */
+  private static async withTimeout<T>(ms: number, work: () => Promise<T>): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        work(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Health is tracked per client, not per Redis. The cache and the queue hold separate
    * connections that can fail independently — and did: over a TLS endpoint the cache stayed up
    * while the queue could not complete a handshake. A single shared flag made the two clients
@@ -89,18 +111,8 @@ export class ScraperService implements OnModuleInit {
     operation: string,
     work: () => Promise<T>,
   ): Promise<T | undefined> {
-    let timer: NodeJS.Timeout | undefined;
-
     try {
-      const result = await Promise.race([
-        work(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`timed out after ${ScraperService.REDIS_TIMEOUT_MS}ms`)),
-            ScraperService.REDIS_TIMEOUT_MS,
-          );
-        }),
-      ]);
+      const result = await ScraperService.withTimeout(ScraperService.REDIS_TIMEOUT_MS, work);
 
       if (this.degraded[client]) {
         this.degraded[client] = false;
@@ -116,8 +128,6 @@ export class ScraperService implements OnModuleInit {
         );
       }
       return undefined;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -335,22 +345,40 @@ export class ScraperService implements OnModuleInit {
           url: this.collectionUrl(slug),
         });
 
-    const [products, total] = await this.productRepo.findAndCount({
-      where: { category: { id: category.id } },
-      relations: ['category'],
-      order: { id: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const read = () =>
+      this.productRepo.findAndCount({
+        where: { category: { id: category.id } },
+        relations: ['category'],
+        order: { id: 'ASC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+    let [products, total] = await read();
+
+    // A category nobody has opened yet holds nothing, and the queue that would fill it may not
+    // be running — or may not be reachable at all. Rather than hand back an empty grid and let
+    // the client conclude the collection is empty, fetch it now: this is one HTTP request to a
+    // JSON feed, so it is affordable to do while someone waits.
+    let scrapedNow = false;
+    if (total === 0 && !category.is_exhausted) {
+      this.logger.log(`No stored products for ${slug} — scraping it inline`);
+      scrapedNow = (await this.scrapeCategoryPageNow(category)) !== null;
+      if (scrapedNow) {
+        [products, total] = await read();
+      }
+    }
 
     if (products.length > 0) {
       await this.cacheSet(cacheKey, { products, category, total }, 60 * 60 * 1000);
     }
 
     return {
-      message: jobQueued
-        ? `Scraping job queued for category: ${slug}. Returning ${products.length} existing products.`
-        : `Category ${slug} fully scraped. Returning ${products.length} products.`,
+      message: this.categoryMessage(slug, products.length, {
+        jobQueued,
+        scrapedNow,
+        exhausted: category.is_exhausted,
+      }),
       products,
       category,
       jobQueued,
@@ -361,8 +389,130 @@ export class ScraperService implements OnModuleInit {
     };
   }
 
+  /**
+   * Says what actually happened. "Fully scraped" used to be the message for anything that did
+   * not queue a job, so once `jobQueued` came to mean "the queue accepted it" rather than "the
+   * collection has more pages", an unreachable queue reported categories as complete that were
+   * nowhere near it — the response claimed `fully scraped` beside `is_exhausted: false`.
+   */
+  private categoryMessage(
+    slug: string,
+    returned: number,
+    state: { jobQueued: boolean; scrapedNow: boolean; exhausted: boolean },
+  ): string {
+    if (state.scrapedNow) {
+      return `Scraped ${slug} live from World of Books. Returning ${returned} products.`;
+    }
+    if (state.jobQueued) {
+      return `Scraping job queued for category: ${slug}. Returning ${returned} existing products.`;
+    }
+    if (state.exhausted) {
+      return `Category ${slug} fully scraped. Returning ${returned} products.`;
+    }
+    return `Returning ${returned} stored products for ${slug}.`;
+  }
+
   private collectionUrl(slug: string): string {
     return `${this.BASE_URL}${this.LOCALE}/collections/${slug}`;
+  }
+
+  /**
+   * Scrape the next unread page of a collection and store it, in the request rather than on the
+   * queue.
+   *
+   * Affordable because the listing scraper reads Shopify's products.json over HTTP and never
+   * launches a browser — one outbound request, and it runs anywhere, including an instance too
+   * small to start Chromium. That is what lets a visitor open a category nobody has opened
+   * before and see real books, with no queue to carry the work and no worker to be running.
+   *
+   * Returns how many products are now stored for the category, or null if the scrape failed.
+   */
+  async scrapeCategoryPageNow(category: Category, maxPages = 1): Promise<number | null> {
+    const startPage = (category.last_page_scraped || 0) + 1;
+
+    try {
+      const result = await ScraperService.withTimeout(
+        ScraperService.INLINE_SCRAPE_TIMEOUT_MS,
+        () => this.categoryScraper.scrape(category.slug, { startPage, maxPages }),
+      );
+
+      return await this.storeCategoryScrape(category, result, startPage);
+    } catch (error) {
+      // A live scrape is a bonus on top of stored data, so its failure must not fail the read
+      // that asked for it. The caller returns whatever the database already had.
+      this.logger.warn(`Inline scrape of ${category.slug} failed: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Persists a listing scrape and advances the category's checkpoint. Shared with the queue
+   * processor so a scrape is stored identically whether it ran in a request or on the queue.
+   *
+   * Returns the category's resulting product count.
+   */
+  async storeCategoryScrape(
+    category: Category,
+    result: CategoryScrapeResult,
+    startPage: number,
+  ): Promise<number> {
+    for (const productData of result.products) {
+      try {
+        // Scoped to this category. source_id is unique per category, not globally, so a
+        // collection listed under two headings fills both instead of the second scrape moving
+        // every row off the first.
+        const existing = await this.productRepo.findOne({
+          where: { source_id: productData.source_id, category: { id: category.id } },
+        });
+
+        if (existing) {
+          existing.title = productData.title;
+          existing.author = productData.author;
+          existing.price = productData.price;
+          existing.currency = productData.currency;
+          existing.image_url = productData.image_url;
+          existing.last_scraped_at = new Date();
+          await this.productRepo.save(existing);
+        } else {
+          await this.productRepo.save(
+            this.productRepo.create({
+              source_id: productData.source_id,
+              title: productData.title,
+              author: productData.author,
+              price: productData.price,
+              currency: productData.currency,
+              image_url: productData.image_url,
+              source_url: productData.source_url,
+              category,
+              last_scraped_at: new Date(),
+            }),
+          );
+        }
+      } catch (error) {
+        // One malformed row should not lose the rest of the page.
+        this.logger.warn(`Failed to save product ${productData.source_id}: ${error.message}`);
+      }
+    }
+
+    // Advanced only after the products are persisted, so an interrupted run re-fetches the page
+    // instead of skipping it.
+    category.last_page_scraped = result.nextPage
+      ? result.nextPage - 1
+      : startPage + result.pagesFetched - 1;
+    category.is_exhausted = result.exhausted;
+    category.product_count = await this.productRepo.count({
+      where: { category: { id: category.id } },
+    });
+    category.last_scraped_at = new Date();
+    await this.categoryRepo.save(category);
+
+    this.logger.log(
+      `Stored ${result.products.length} products for ${category.slug} ` +
+        `(pages ${startPage}..${startPage + result.pagesFetched - 1}` +
+        `${result.exhausted ? ', collection exhausted' : `, next page ${result.nextPage}`})`,
+    );
+
+    return category.product_count;
   }
 
   async scrapeProductBySourceId(sourceId: string, forceRefresh = false): Promise<Product | null> {

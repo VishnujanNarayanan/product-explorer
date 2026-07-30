@@ -11,6 +11,7 @@ import { useCategories } from "@/lib/hooks/useCategories"
 import { useNavigation } from "@/lib/hooks/useNavigation"
 import { useInteractiveScraper } from "@/lib/hooks/useInteractiveScraper"
 import { navigationAPI } from "@/lib/api/navigation"
+import { scrapeCollectionInBrowser } from "@/lib/scrape/browser-scraper"
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner"
 import { Button } from "@/components/ui/Button"
 import { ScrapeAgainButton } from "@/components/shared/ScrapeAgainButton"
@@ -207,6 +208,30 @@ function ProductsPageContent() {
         await loadProductsRef.current()
         loadedSlugRef.current = categorySlug
 
+        // Nothing stored and nothing the server could fetch — so fetch it here instead.
+        // World of Books is a Shopify storefront and serves its collections as JSON with
+        // `access-control-allow-origin: *`, which means this browser may read the same feed
+        // the server reads. Doing it here costs the server nothing and works even when the
+        // instance is too small for a headless browser or its queue is down.
+        if (lastProductCountRef.current === 0) {
+          try {
+            const live = await scrapeCollectionInBrowser(categorySlug)
+
+            if (live.products.length > 0) {
+              setDisplayProducts(live.products)
+              lastProductCountRef.current = live.products.length
+              toast({
+                title: `Scraped ${live.products.length} books in your browser`,
+                description: `Fetched from World of Books in ${(live.durationMs / 1000).toFixed(1)}s — open the network tab to watch it happen.`,
+              })
+            }
+          } catch (error) {
+            // Only ever an enhancement over what the server returned; if the storefront
+            // refuses this browser, the page is no worse off than before.
+            console.warn('Browser-side scrape failed, leaving the server result in place:', error)
+          }
+        }
+
         await new Promise(resolve => setTimeout(resolve, 100))
 
         // Polling is the no-WebSocket fallback; the live session pushes DATA_CHUNK instead.
@@ -233,7 +258,9 @@ function ProductsPageContent() {
     return () => {
       stopPolling()
     }
-  }, [categorySlug, navigationSlug, stopPolling])
+    // `toast` is stable by construction (useToast wraps it in useCallback with no deps), so it
+    // can sit here without re-running this effect and resetting the grid on every render.
+  }, [categorySlug, navigationSlug, stopPolling, toast])
 
   // Drive the real browser session: clicking a category here clicks it on World of Books.
   // Runs when the category changes and also when the socket becomes ready afterwards, so

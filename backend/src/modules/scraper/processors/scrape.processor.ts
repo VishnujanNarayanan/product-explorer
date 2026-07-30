@@ -111,55 +111,10 @@ export class ScrapeProcessor {
 
       const result = await this.categoryScraper.scrape(categorySlug, { startPage, maxPages });
 
-      // Save products to database
-      let savedCount = 0;
-      let updatedCount = 0;
-
-      for (const productData of result.products) {
-        try {
-          // Scoped to this category. source_id is unique per category, not globally, so a
-          // collection listed under two headings fills both instead of the second scrape
-          // moving every row off the first.
-          const existingProduct = await this.productRepo.findOne({
-            where: { source_id: productData.source_id, category: { id: category.id } },
-          });
-
-          if (existingProduct) {
-            existingProduct.title = productData.title;
-            existingProduct.author = productData.author;
-            existingProduct.price = productData.price;
-            existingProduct.currency = productData.currency;
-            existingProduct.image_url = productData.image_url;
-            existingProduct.last_scraped_at = new Date();
-            await this.productRepo.save(existingProduct);
-            updatedCount++;
-          } else {
-            const newProduct = this.productRepo.create({
-              source_id: productData.source_id,
-              title: productData.title,
-              author: productData.author,
-              price: productData.price,
-              currency: productData.currency,
-              image_url: productData.image_url,
-              source_url: productData.source_url,
-              category,
-              last_scraped_at: new Date(),
-            });
-            await this.productRepo.save(newProduct);
-            savedCount++;
-          }
-        } catch (error) {
-          this.logger.warn(`Failed to save product ${productData.source_id}: ${error.message}`);
-        }
-      }
-
-      // Advance the checkpoint only after the products for those pages are persisted, so an
-      // interrupted run re-fetches the page instead of skipping it.
-      category.last_page_scraped = result.nextPage ? result.nextPage - 1 : startPage + result.pagesFetched - 1;
-      category.is_exhausted = result.exhausted;
-      category.product_count = await this.productRepo.count({ where: { category: { id: categoryId } } });
-      category.last_scraped_at = new Date();
-      await this.categoryRepo.save(category);
+      // Storing is shared with the request path, which now scrapes inline when a category has
+      // nothing yet. Two copies of this drifting apart would mean the same scrape landing
+      // differently depending on which route reached it.
+      const productCount = await this.scraperService.storeCategoryScrape(category, result, startPage);
 
       if (jobId) {
         await this.scrapeJobRepo.update(jobId, {
@@ -169,9 +124,7 @@ export class ScrapeProcessor {
       }
 
       this.logger.log(
-        `Category ${categorySlug} scrape completed: ${savedCount} new, ${updatedCount} updated ` +
-          `(pages ${startPage}..${startPage + result.pagesFetched - 1}` +
-          `${result.exhausted ? ', collection exhausted' : `, next page ${result.nextPage}`})`,
+        `Category ${categorySlug} scrape completed: ${productCount} products stored in total`,
       );
     } catch (error) {
       this.logger.error(`Category scrape failed for ${categorySlug}: ${error.message}`);
