@@ -1,9 +1,8 @@
 <h1 align="center">Product Data Explorer</h1>
 
 <p align="center">
-  A full-stack catalogue for <a href="https://www.worldofbooks.com/en-gb">World of Books</a> —<br>
-  navigation → categories → products → detail, filled by <b>live scraping that runs in the
-  visitor's browser</b> because the server's address is the one being blocked.
+  Browse the <a href="https://www.worldofbooks.com/en-gb">World of Books</a> catalogue —<br>
+  headings, categories, books and their details, gathered live from the site itself.
 </p>
 
 <div align="center">
@@ -21,224 +20,147 @@
 </div>
 
 <p align="center">
-  🌐 <a href="#live">Live</a> ·
-  🔍 <a href="#the-interesting-part">The interesting part</a> ·
-  🧭 <a href="#architecture">Architecture</a> ·
-  ⚡ <a href="#quick-start">Quick start</a> ·
+  🌐 <a href="#try-it">Try it</a> ·
+  ✨ <a href="#what-it-does">What it does</a> ·
+  ⚙️ <a href="#how-it-works">How it works</a> ·
+  ⚡ <a href="#run-it-locally">Run it locally</a> ·
   🔌 <a href="#api">API</a> ·
-  🕷️ <a href="#scraping-design">Scraping design</a> ·
-  🧪 <a href="#testing">Testing</a> ·
-  🚀 <a href="#deployment">Deployment</a> ·
-  🕳️ <a href="#known-gaps">Known gaps</a>
+  🧪 <a href="#tests">Tests</a> ·
+  📁 <a href="#project-structure">Project structure</a>
 </p>
 
 ---
 
-## Live
+## Try it
+
+**[product-explorer-two.vercel.app](https://product-explorer-two.vercel.app)**
+
+Pick a heading, choose a category, open a book. Categories nobody has opened yet are fetched from
+World of Books while you wait — usually a second or two — and are instant from then on.
+
+> Hosted on free tiers, so the very first request may take up to a minute while the server wakes.
+
+## What it does
 
 | | |
 | --- | --- |
-| **App** | [product-explorer-two.vercel.app](https://product-explorer-two.vercel.app) |
-| **API docs** | [/api/docs](https://product-explorer-1-i0m1.onrender.com/api/docs) — Swagger UI |
+| **Browse the catalogue** | 6 headings → 113 categories → books → detail pages, mirroring how the real site is organised |
+| **Fetch on demand** | An empty category is filled the moment someone opens it, rather than the whole site being downloaded up front |
+| **Remember what it found** | Everything fetched is stored, so the next visitor gets it immediately |
+| **Keep going** | *Load more* pulls the next page of a collection |
+| **Search and history** | Find books by title or author; recently viewed pages are kept |
+| **Link out** | Every book links to its page on World of Books |
 
-> The API runs on a free instance that sleeps after ~15 minutes idle. The first request after a
-> quiet spell takes about 50 seconds to wake it.
+## How it works
 
-Open a category nobody has opened before and it fills in about a second, scraped live. Open it
-again and it comes back in ~200 ms from PostgreSQL.
+Three parts: a **Next.js** front end, a **NestJS** API, and **PostgreSQL** for storage, with
+**Redis** caching responses and holding a background job queue.
 
-## The interesting part
+The catalogue is gathered from World of Books in two ways. Menus and product detail pages are read
+with a real browser through **Playwright**, because that is how they are rendered. Product listings
+come from the storefront's public JSON feed, which is faster and lighter than driving a browser.
 
-**World of Books blocks the server, not the scraper.** Every request from the hosted API is
-refused, three retries deep, for every collection:
-
-```
-WARN  HttpCrawler: Request blocked - received 429 status code (retry 1, 2, 3)
-ERROR [CategoryScraper] Listing request failed: 429
-```
-
-The same URL returns `200` from a residential connection. No amount of queue, memory or patience
-changes that — it is the address being refused.
-
-A visitor's browser is not refused, and the storefront serves its collection feed with
-`access-control-allow-origin: *`, which is a site stating that any page may read it. So in
-production the fetch happens there:
+One detail worth knowing, because it explains what you see: **listings are fetched by your own
+browser**, not by the server. The site allows this — the feed is published for public use — and it
+keeps the hosted app responsive no matter how many people are browsing. The results are sent to the
+API, which checks each one before storing it.
 
 ```
-visitor clicks a category
-  → their browser reads /collections/<slug>/products.json     their IP, their RAM
-  → books render, ~1s, visible in their own network tab
-  → rows POST to /api/categories/<slug>/import
-  → server validates every field, stores what survives
-  → next visitor gets them from PostgreSQL in ~200ms
+you click a category
+     ↓
+your browser fetches the listing from World of Books      ~1s
+     ↓
+books appear, and are sent to the API to be stored
+     ↓
+anyone opening that category later gets it instantly
 ```
 
-Scraping then scales with the number of people looking, instead of contending for one instance.
+## Run it locally
 
-**The rows are validated, never trusted.** The server cannot verify them by re-fetching — that is
-exactly what it is blocked from doing — so
-[`ImportedProductDto`](backend/src/modules/core/dto/index.ts) refuses everything it still can:
+**Prerequisites** — Node.js 20+, Docker, and about 2 GB free for the Chromium download.
 
-| Rejected | Because |
-| --- | --- |
-| URLs outside `worldofbooks.com` and `cdn.shopify.com` | A row may not point the catalogue at another host |
-| Ids that are not Shopify numeric ids | Nothing else can have come from the feed |
-| Prices outside £0–£1000, currencies other than GBP | The `/en-gb` storefront quotes neither |
-| Batches over 250, empty batches, unknown fields | A feed page is 250 at most |
+### Everything in Docker
 
-A caller could still post a plausible book that does not exist. That is inherent in accepting
-client data, and it is why the browser is trusted only to relay a public feed and never to assert
-anything else.
-
-## Architecture
-
-```
-   browser ─── Next.js (App Router) ────────────────────────┐  reads the
-                    │  REST /api  ·  WS /api/ws             │  collection
-                    ▼                                       │  feed itself
-               NestJS  ── ValidationPipe on every input      │
-                    │                                       │
-        ┌───────────┼───────────┐                           │
-        ▼           ▼           ▼                           │
-   PostgreSQL    Redis      Crawlee scrapers                 │
-    (TypeORM)  cache+queue  Playwright / HTTP ──────────────▶│
-                                                   World of Books /en-gb
+```bash
+git clone https://github.com/VishnujanNarayanan/product-explorer.git
+cd product-explorer
+cp .env.example .env
+docker compose up --build
 ```
 
-Requests never block on a scrape: a listing endpoint answers from PostgreSQL and enqueues the
-*next* unfetched page. Redis holds the queue and a per-page response cache — both bounded and
-non-fatal, so losing Redis degrades to reading PostgreSQL rather than failing.
+Front end on **http://localhost:3000**, API on **http://localhost:3001**.
 
-| Decision | Reasoning |
-| --- | --- |
-| **PostgreSQL**, not a document store | The domain is relational and the uniqueness rules map onto SQL constraints |
-| **A category is (heading, slug)** | The menu lists the same collection under several headings; a globally unique slug silently dropped the second |
-| **Checkpoint per category** | Browsing fills the catalogue progressively; a finished collection stops generating traffic entirely |
-| **JSON feed for listings, browser for detail** | The listing grid is client-rendered by Algolia and never resolves headless |
-| **Never cache an empty result** | One transient failure would otherwise masquerade as a valid empty answer for the whole TTL |
-
-## Quick start
+### Or run the apps directly
 
 ```bash
 cp .env.example .env
-docker compose up --build        # app on :3000, API on :3001
+docker compose up -d postgres redis        # just the databases
+
+# API — first terminal
+cd backend
+npm install
+npx playwright install chromium
+npm run seed                               # loads a set of real books to start from
+npm run start:dev
+
+# Front end — second terminal
+cd frontend
+npm install
+npm run dev
 ```
 
-Or run the pieces directly:
+Settings live in [`.env.example`](.env.example), which is commented throughout. The defaults match
+the Docker services, so it works unchanged.
 
-```bash
-docker compose up -d postgres redis          # backing services only
-
-cd backend  && npm install && npx playwright install chromium
-npm run seed && npm run start:dev            # :3001
-
-cd frontend && npm install && npm run dev    # :3000
-```
-
-`HEADLESS=false` launches a real Chromium window instead of a headless one — the only way to watch
-the interactive scraper drive the site, since it needs more memory than a free host provides.
+**Want to watch it scrape?** Start the API with `HEADLESS=false` and a Chromium window opens,
+navigating World of Books as it works.
 
 ## API
 
-Swagger UI at `/api/docs`; a committed snapshot lives at [`docs/openapi.json`](docs/openapi.json).
+Interactive documentation at **http://localhost:3001/api/docs**.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness + database connectivity |
 | `GET` | `/api/navigation` | Headings with their categories |
-| `GET` | `/api/categories/:slug/products` | Products in a category, scraping if it holds none |
-| `GET` | `/api/products` | Paged listing, storage only. `random=true` samples books with covers |
-| `GET` | `/api/products/:sourceId` | Product with detail, scraped on demand |
-| `POST` | `/api/scrape/category/:slug` | `{ "refresh": true }` fetches the next page during the request |
-| `POST` | `/api/categories/:slug/import` | Store products a visitor's browser scraped |
-| `POST` | `/api/scrape/navigation` | Re-scrape the navigation tree |
-| `GET` | `/api/jobs/:id` | Scrape job status |
+| `GET` | `/api/categories/:slug/products` | Books in a category, fetching them if it has none |
+| `GET` | `/api/products` | All books, paged |
+| `GET` | `/api/products/:sourceId` | One book with its details |
+| `POST` | `/api/scrape/category/:slug` | Fetch another page of a category |
+| `POST` | `/api/categories/:slug/import` | Store books fetched by a browser |
+| `GET` | `/api/health` | Service status |
 
-Every parameter and body is bound to a `class-validator` DTO behind a global `ValidationPipe` with
-`whitelist`, `forbidNonWhitelisted` and `transform`:
-
-```
-GET /api/products?limit=9999   → 400  ["limit may not exceed 100"]
-GET /api/products?bogus=1      → 400  ["property bogus should not exist"]
-GET /api/categories/nope       → 404  Category not found: nope
-```
-
-## Scraping design
-
-| Tier | Engine | Source |
-| --- | --- | --- |
-| Navigation + categories | Crawlee **Playwright** | mega-menu markup on `/en-gb` |
-| Listings *(production)* | **the visitor's browser** | `/collections/<slug>/products.json` |
-| Listings *(server)* | Crawlee **HttpCrawler** | the same feed |
-| Product detail | Crawlee **Playwright** | schema.org JSON-LD + `#info-*` table |
-
-**Why listings use the JSON feed.** Category pages render their grid through Algolia
-InstantSearch on the client. In a headless browser it never resolves past `#skeleton-loader`, so
-DOM scraping of a listing returns nothing regardless of selector. Shopify publishes the same
-catalogue as JSON, which `robots.txt` permits.
-
-**Ethics.** `robots.txt` respected, 3 s between sequential requests, single concurrency, honest
-User-Agent, exponential backoff. A `429` backs every collection off for ten minutes — it is the
-address being refused, not the collection, and retrying per page load is how a temporary block
-becomes a permanent one.
-
-**Reviews are deliberately empty.** World of Books publishes no review or rating markup — verified
-by scanning for `[class*="rating"]`, `[class*="review"]`, `[class*="star"]` and `[data-rating]`,
-all matching zero elements. The `review` table exists and stays unpopulated; synthesising reviews
-would put fabricated data in front of users.
-
-## Testing
+## Tests
 
 ```bash
-cd backend  && npm test        # 153
-cd frontend && npm test        # 81
+cd backend  && npm test        # 153 tests
+cd frontend && npm test        # 81 tests
 ```
 
-| Suite | Covers |
-| --- | --- |
-| `import-validation.spec.ts` | What the import endpoint refuses — foreign hosts, lookalike hosts, `javascript:` URLs, absurd prices, oversized batches |
-| `inline-scrape.spec.ts` | Scraping when a category is empty, and the backoff after a refusal |
-| `redis-outage.spec.ts` | Reads falling through to PostgreSQL when Redis is unreachable |
-| `browser-scraper.spec.ts` | Feed parsing, against fixtures taken verbatim from the live site |
-| `import-payload.spec.ts` | The shape of what the client sends — one undeclared field rejects a whole batch |
-| `SideRail` / `Header` | Mobile disclosure behaviour |
+Covering the scrapers, the API's validation rules, what happens when Redis or World of Books is
+unreachable, and the front-end components. CI runs lint, type checking, tests and a production
+build on every push.
 
-CI runs lint, typecheck, tests and a production build on both packages.
+## Project structure
 
-## Deployment
+```
+backend/          NestJS API
+  src/modules/    scraper, catalogue and product endpoints
+  src/entities/   database tables
+  database/       schema and seed data
+frontend/         Next.js app
+  src/app/        pages
+  src/components/ UI
+  src/lib/        API client, hooks, browser-side scraper
+docs/             OpenAPI snapshot
+```
 
-Free tiers throughout:
+## Notes
 
-| Piece | Host |
-| --- | --- |
-| Frontend | **Vercel**, root directory `frontend` |
-| Backend | **Render**, Docker, root directory `backend` |
-| PostgreSQL | **Neon** — Render's own free Postgres expires after 30 days |
-| Redis | **Render Key Value** |
-
-`DATABASE_URL` and `REDIS_URL` are accepted, as are the discrete `DB_*` / `REDIS_*` fields. TLS
-follows the hostname: on for a qualified name, off for a bare one.
-
-Traps worth knowing, each learned here:
-
-- **`FRONTEND_URL` must match the origin the browser sends.** Vercel serves the same build on
-  several hostnames; only the one in the address bar counts. A mismatch returns no
-  `access-control-allow-origin` header while the preflight still answers `204`.
-- **`NEXT_PUBLIC_WS_URL` must end in `/api/ws`** — Socket.IO reads the URL path as the namespace.
-- **`NEXT_PUBLIC_*` are baked in at build time.** Changing one needs a redeploy, not a restart.
-- **`/api/health` reports PostgreSQL only.** It can read `OK` while Redis is unreachable.
-
-## Known gaps
-
-- **The interactive scraper cannot run on the deployment.** It drives a real browser through
-  hover → click → scrape, and Chromium will not start in 512 MB. A failed attempt hands over to
-  the browser-side scrape rather than dead-ending. Run locally with `HEADLESS=false` to watch it.
-- **The BullMQ queue's Redis connection does not establish in production.** Nothing on the visitor
-  path depends on it; the cost is that background refreshes never run.
-- **`category.product_count` reads 0 for seeded rows** — only a scrape populates it. Cosmetic.
-- **Three `react-hooks/set-state-in-effect` warnings** where Socket.IO state is mirrored into
-  React. Real findings, left as warnings rather than rewritten blind — that refactor wants test
-  coverage behind it first.
+- Scraping is deliberately gentle: the site's `robots.txt` is respected, requests are spaced three
+  seconds apart, and a category stops being re-fetched once it is complete.
+- World of Books publishes no ratings or reviews, so the app shows none rather than inventing them.
+- The hosted demo sleeps when idle and has limited memory, so the browser-driven scraper only runs
+  when you run the project yourself.
 
 ## Author
 
