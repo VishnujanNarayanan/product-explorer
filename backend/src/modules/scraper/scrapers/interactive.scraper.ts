@@ -69,7 +69,7 @@ export class InteractiveScraper extends BaseScraper {
     // context or browser has been closed": Chromium crashes under them when more than one
     // browser starts at once, which is exactly what happens when a second tab connects.
     const browser = await this.launchWithRetry({
-      headless: true,
+      headless: this.HEADLESS,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -77,7 +77,8 @@ export class InteractiveScraper extends BaseScraper {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--disable-gpu',
-        '--window-size=1920,1080',
+        // Headed runs pin their own geometry; the headless viewport stays at 1080p.
+        ...(this.HEADLESS ? ['--window-size=1920,1080'] : this.browserWindowArgs),
       ],
     });
 

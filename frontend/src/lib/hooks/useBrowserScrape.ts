@@ -41,6 +41,9 @@ const IDLE: BrowserScrapeState = {
 
 export function useBrowserScrape() {
   const [state, setState] = useState<BrowserScrapeState>(IDLE)
+  // Every book this browser has fetched since the page loaded. Kept apart from `state`, which
+  // is replaced wholesale at the start of each scrape and describes only the current one.
+  const [sessionScraped, setSessionScraped] = useState(0)
   // Pages already taken for a category, so "load more" asks for the next one rather than
   // re-fetching what is already on screen.
   const pageBySlug = useRef<Map<string, number>>(new Map())
@@ -83,6 +86,7 @@ export function useBrowserScrape() {
         }
 
         pageBySlug.current.set(slug, page)
+        setSessionScraped(count => count + result.products.length)
 
         setState({
           step: "saving",
@@ -142,6 +146,8 @@ export function useBrowserScrape() {
   return {
     ...state,
     isScraping: state.step === "fetching" || state.step === "saving",
+    /** Books fetched by this browser since the page loaded, across every category. */
+    sessionScraped,
     scrape,
     reset,
     /** Highest feed page taken for a category in this session. */

@@ -62,7 +62,14 @@ function ProductsPageContent() {
     isScraping: isBrowserScraping,
     message: browserScrapeMessage,
     step: browserScrapeStep,
+    sessionScraped: browserSessionScraped,
   } = useBrowserScrape()
+
+  // Books fetched from World of Books since this page loaded, whichever path fetched them.
+  // Reading only the live session's counter meant a grid filled by this browser reported "0
+  // scraped in this session" beside forty books it had just scraped — true of that one counter,
+  // and the opposite of what the line is telling someone.
+  const scrapedThisSession = totalScraped + browserSessionScraped
 
   // State
   // Category whose grid holds books this browser scraped, so stored rows do not overwrite them.
@@ -586,8 +593,8 @@ function ProductsPageContent() {
                   </span>
                   <span aria-hidden>·</span>
                   <span>
-                    {isWsConnected
-                      ? `${totalScraped} scraped in this session`
+                    {scrapedThisSession > 0
+                      ? `${scrapedThisSession} scraped in this session`
                       : 'served from storage'}
                   </span>
                 </p>
@@ -657,8 +664,8 @@ function ProductsPageContent() {
                   <p className="mt-0.5 text-sm text-muted-foreground">{progressLine}</p>
                   <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-muted-foreground">
                     {retryLine ? `${retryLine} · ` : ''}
-                    {isWsConnected && totalScraped > 0
-                      ? `${totalScraped} scraped so far`
+                    {scrapedThisSession > 0
+                      ? `${scrapedThisSession} scraped so far`
                       : 'this usually takes under a minute'}
                   </p>
                 </div>
