@@ -1,11 +1,12 @@
 // frontend/src/components/shared/ScrapeAgainButton.tsx
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { useToast } from "@/lib/hooks/useToast"
 import { webSocketClient } from "@/lib/api/websocket"
 import { navigationAPI } from "@/lib/api/navigation"
+import { useBrowserScrape } from "@/lib/hooks/useBrowserScrape"
 import { RefreshCw, Sparkles, Loader2, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -31,13 +32,35 @@ export function ScrapeAgainButton({
   disabled = false,
 }: ScrapeAgainButtonProps) {
   const { toast } = useToast()
-  const [isScraping, setIsScraping] = useState(false)
+  const [isRequesting, setIsRequesting] = useState(false)
   const [lastScraped, setLastScraped] = useState<Date | null>(null)
+  const {
+    scrape: browserScrape,
+    isScraping: isBrowserScraping,
+    message: browserScrapeMessage,
+    step: browserScrapeStep,
+  } = useBrowserScrape()
+
+  const isScraping = isRequesting || isBrowserScraping
+
+  // The hook reports what happened; this turns its final state into one honest sentence
+  // instead of a fixed title over a contradicting description.
+  useEffect(() => {
+    if (browserScrapeStep === 'done') {
+      toast({ title: "Scrape complete", description: browserScrapeMessage })
+    } else if (browserScrapeStep === 'failed') {
+      toast({
+        title: "Scrape failed",
+        description: browserScrapeMessage,
+        variant: "destructive",
+      })
+    }
+  }, [browserScrapeStep, browserScrapeMessage, toast])
 
   const handleScrapeAgain = async () => {
     if (isScraping) return
-    
-    setIsScraping(true)
+
+    setIsRequesting(true)
 
     try {
       // Live session first: this is the same path a category click takes, so results arrive
@@ -52,19 +75,30 @@ export function ScrapeAgainButton({
         return
       }
 
-      // No live session: queue a listing scrape and show whatever is already stored. The
-      // scrape keeps running after this returns, so the wording says so rather than
-      // claiming fresh data has landed.
-      const response = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug)
-      setLastScraped(new Date())
-
+      // No live session, so scrape from this browser. World of Books answers the API's
+      // datacentre address with 429 while serving a visitor's browser normally, which makes
+      // this the path that actually reaches the storefront in production.
       toast({
-        title: "Scrape Queued",
-        description: response.jobQueued
-          ? `Fetching more of ${categoryTitle} in the background — this page will fill in.`
-          : `${categoryTitle} is fully scraped; showing everything stored.`,
+        title: "Scraping World of Books",
+        description: `Fetching more books from ${categoryTitle} in your browser…`,
       })
 
+      const scraped = await browserScrape(categorySlug, {
+        categoryTitle,
+        navigationSlug,
+        nextPage: true,
+      })
+      setLastScraped(new Date())
+
+      if (scraped.length > 0) {
+        onScrapeComplete?.(scraped)
+        return
+      }
+
+      // Nothing came back. Either the collection has ended or this browser was refused —
+      // the hook knows which, and either way the previous wording ("Scrape Queued" over a
+      // message saying the category was complete) told the visitor two different things.
+      const response = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug)
       onScrapeComplete?.(response.products || [])
 
     } catch (error: any) {
@@ -74,7 +108,7 @@ export function ScrapeAgainButton({
         variant: "destructive",
       })
     } finally {
-      setIsScraping(false)
+      setIsRequesting(false)
     }
   }
 

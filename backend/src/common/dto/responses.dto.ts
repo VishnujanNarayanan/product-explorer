@@ -39,9 +39,40 @@ export class CategoryProductsDto extends PaginationMetaDto {
     example: true,
     description:
       'True when a background listing scrape was queued. Only happens while the collection ' +
-      'still has unfetched pages, so browsing an exhausted category costs the origin nothing.',
+      'still has unfetched pages, so browsing an exhausted category costs the origin nothing. ' +
+      'False also when the queue could not be reached — it reports what happened, not what ' +
+      'was intended.',
   })
   jobQueued: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: 'True when this request fetched from World of Books rather than only reading storage.',
+  })
+  scrapedNow: boolean;
+
+  @ApiProperty({ example: 40, description: 'Products added by that fetch.' })
+  addedCount: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether the collection has pages left, which is what "load more" depends on.',
+  })
+  sourceHasMore: boolean;
+}
+
+export class ImportScrapedProductsResponseDto {
+  @ApiProperty({ example: 'Stored 40 new and 0 updated products for author-books-by-agatha-christie' })
+  message: string;
+
+  @ApiProperty({ example: 40 })
+  added: number;
+
+  @ApiProperty({ example: 0 })
+  updated: number;
+
+  @ApiProperty({ example: 40, description: 'Products stored for the category after the import.' })
+  total: number;
 }
 
 export class ScrapeNavigationResponseDto {

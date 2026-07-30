@@ -109,6 +109,7 @@ describe('CoreController', () => {
         page: 2,
         limit: 10,
         navigationSlug: undefined,
+        force: false,
       });
     });
 
@@ -118,6 +119,7 @@ describe('CoreController', () => {
         page: 1,
         limit: 24,
         navigationSlug: undefined,
+        force: false,
       });
     });
 
@@ -131,6 +133,7 @@ describe('CoreController', () => {
         page: 1,
         limit: 24,
         navigationSlug: 'fiction-books',
+        force: false,
       });
     });
 

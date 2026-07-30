@@ -73,6 +73,14 @@ export class ScraperService implements OnModuleInit {
    */
   private static readonly INLINE_SCRAPE_TIMEOUT_MS = 20000;
 
+  /** How long to leave a collection alone after World of Books refuses the request. */
+  private static readonly BLOCKED_BACKOFF_MS = 10 * 60 * 1000;
+  /** Shorter for an ordinary failure, which is likelier to be transient. */
+  private static readonly FAILED_BACKOFF_MS = 60 * 1000;
+
+  /** Category slug -> the time before which not to ask World of Books for it again. */
+  private readonly scrapeBackoff = new Map<string, number>();
+
   /** Rejects if `work` has not settled in time, without leaving a timer behind. */
   private static async withTimeout<T>(ms: number, work: () => Promise<T>): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
@@ -279,16 +287,28 @@ export class ScraperService implements OnModuleInit {
 
   async scrapeCategoryBySlug(
     slug: string,
-    options: { page?: number; limit?: number; navigationSlug?: string } = {},
+    options: {
+      page?: number;
+      limit?: number;
+      navigationSlug?: string;
+      /** Fetch another page now, rather than only when the category has nothing stored. */
+      force?: boolean;
+    } = {},
   ): Promise<{
     message: string;
     products: Product[];
     category?: Category;
     jobQueued: boolean;
+    /** Whether this request fetched from World of Books, so a client can say so. */
+    scrapedNow: boolean;
+    /** Rows added by that fetch — 0 means the collection had nothing new to give. */
+    addedCount: number;
     total: number;
     page: number;
     limit: number;
     hasMore: boolean;
+    /** Whether the collection has pages left, which is what "load more" depends on. */
+    sourceHasMore: boolean;
   }> {
     const page = Math.max(1, options.page ?? 1);
     const limit = Math.min(100, Math.max(1, options.limit ?? 24));
@@ -298,11 +318,14 @@ export class ScraperService implements OnModuleInit {
     // too — the same slug under two headings is two categories with two product lists.
     const navigationSlug = options.navigationSlug;
     const cacheKey = `category_${navigationSlug ?? '_'}_${slug}_p${page}_l${limit}`;
-    const cached = await this.cacheGet<{
-      products: Product[];
-      category?: Category;
-      total: number;
-    }>(cacheKey);
+    // A forced scrape is a request for new data, so a cache hit is exactly the wrong answer.
+    const cached = options.force
+      ? undefined
+      : await this.cacheGet<{
+          products: Product[];
+          category?: Category;
+          total: number;
+        }>(cacheKey);
 
     // Only serve a cache hit that actually has products; an empty array means the previous
     // scrape failed and must not suppress a retry.
@@ -313,10 +336,13 @@ export class ScraperService implements OnModuleInit {
         products: cached.products,
         category: cached.category,
         jobQueued: false,
+        scrapedNow: false,
+        addedCount: 0,
         total: cached.total,
         page,
         limit,
         hasMore: page * limit < cached.total,
+        sourceHasMore: cached.category ? !cached.category.is_exhausted : false,
       };
     }
 
@@ -355,14 +381,20 @@ export class ScraperService implements OnModuleInit {
       });
 
     let [products, total] = await read();
+    const totalBefore = total;
 
-    // A category nobody has opened yet holds nothing, and the queue that would fill it may not
-    // be running — or may not be reachable at all. Rather than hand back an empty grid and let
-    // the client conclude the collection is empty, fetch it now: this is one HTTP request to a
-    // JSON feed, so it is affordable to do while someone waits.
+    // Two reasons to fetch from World of Books during the request. A category nobody has opened
+    // holds nothing, and handing back an empty grid lets the client conclude the collection is
+    // empty. And "scrape again" or "load more" is a direct request for another page, which
+    // would otherwise depend on a queue that may not be running. Either way it is one HTTP
+    // request to a JSON feed — affordable to do while someone waits.
     let scrapedNow = false;
-    if (total === 0 && !category.is_exhausted) {
-      this.logger.log(`No stored products for ${slug} — scraping it inline`);
+    if (!category.is_exhausted && (total === 0 || options.force)) {
+      this.logger.log(
+        options.force
+          ? `Fetching another page of ${slug} on request`
+          : `No stored products for ${slug} — scraping it inline`,
+      );
       scrapedNow = (await this.scrapeCategoryPageNow(category)) !== null;
       if (scrapedNow) {
         [products, total] = await read();
@@ -373,19 +405,25 @@ export class ScraperService implements OnModuleInit {
       await this.cacheSet(cacheKey, { products, category, total }, 60 * 60 * 1000);
     }
 
+    const addedCount = Math.max(0, total - totalBefore);
+
     return {
       message: this.categoryMessage(slug, products.length, {
         jobQueued,
         scrapedNow,
+        addedCount,
         exhausted: category.is_exhausted,
       }),
       products,
       category,
       jobQueued,
+      scrapedNow,
+      addedCount,
       total,
       page,
       limit,
       hasMore: page * limit < total,
+      sourceHasMore: !category.is_exhausted,
     };
   }
 
@@ -398,10 +436,14 @@ export class ScraperService implements OnModuleInit {
   private categoryMessage(
     slug: string,
     returned: number,
-    state: { jobQueued: boolean; scrapedNow: boolean; exhausted: boolean },
+    state: { jobQueued: boolean; scrapedNow: boolean; addedCount: number; exhausted: boolean },
   ): string {
     if (state.scrapedNow) {
-      return `Scraped ${slug} live from World of Books. Returning ${returned} products.`;
+      // A fetch that added nothing is worth saying plainly: it means the collection has no more
+      // to give, not that the fetch failed.
+      return state.addedCount > 0
+        ? `Scraped ${state.addedCount} new products for ${slug} from World of Books.`
+        : `Fetched ${slug} from World of Books — nothing new on that page.`;
     }
     if (state.jobQueued) {
       return `Scraping job queued for category: ${slug}. Returning ${returned} existing products.`;
@@ -430,19 +472,149 @@ export class ScraperService implements OnModuleInit {
   async scrapeCategoryPageNow(category: Category, maxPages = 1): Promise<number | null> {
     const startPage = (category.last_page_scraped || 0) + 1;
 
+    // World of Books rate-limits by IP, and a datacentre address can be refused for a while
+    // regardless of how politely it asks. Without this, every page load re-attempted a scrape
+    // that had just been turned away — three attempts in thirty seconds for one category, which
+    // is how a temporary block earns itself a permanent one.
+    const blockedUntil = this.scrapeBackoff.get(category.slug);
+    if (blockedUntil && blockedUntil > Date.now()) {
+      const seconds = Math.ceil((blockedUntil - Date.now()) / 1000);
+      this.logger.log(`Skipping scrape of ${category.slug}: backing off for another ${seconds}s`);
+      return null;
+    }
+
     try {
       const result = await ScraperService.withTimeout(
         ScraperService.INLINE_SCRAPE_TIMEOUT_MS,
         () => this.categoryScraper.scrape(category.slug, { startPage, maxPages }),
       );
 
+      this.scrapeBackoff.delete(category.slug);
       return await this.storeCategoryScrape(category, result, startPage);
     } catch (error) {
+      // Being turned away is not the same as failing. A 429 says "not from you, not yet", so
+      // wait considerably longer before asking again.
+      const rejected = /429|blocked|rate/i.test(error.message ?? '');
+      const backoffMs = rejected
+        ? ScraperService.BLOCKED_BACKOFF_MS
+        : ScraperService.FAILED_BACKOFF_MS;
+      this.scrapeBackoff.set(category.slug, Date.now() + backoffMs);
+
       // A live scrape is a bonus on top of stored data, so its failure must not fail the read
       // that asked for it. The caller returns whatever the database already had.
-      this.logger.warn(`Inline scrape of ${category.slug} failed: ${error.message}`);
+      this.logger.warn(
+        `Inline scrape of ${category.slug} failed (${error.message}) — ` +
+          `not retrying for ${Math.round(backoffMs / 1000)}s`,
+      );
       return null;
     }
+  }
+
+  /**
+   * Stores products a visitor's browser read from the collection feed.
+   *
+   * The server cannot fetch that feed from where it runs — World of Books answers its
+   * datacentre address with 429 while serving a visitor's browser normally — so this is the only
+   * route by which the live catalogue grows in production. The rows have already been through
+   * `ImportedProductDto`, which is where the actual distrust lives; by here they are shaped like
+   * products and pointed at the right hosts.
+   *
+   * Returns how many rows were new.
+   */
+  async importScrapedProducts(
+    slug: string,
+    products: {
+      source_id: string;
+      title: string;
+      author?: string | null;
+      price: number;
+      currency: string;
+      image_url: string;
+      source_url: string;
+    }[],
+    options: { navigationSlug?: string; page?: number } = {},
+  ): Promise<{ added: number; updated: number; total: number; category: Category }> {
+    const category = await findCategory(this.categoryRepo, slug, options.navigationSlug, [
+      'navigation',
+    ]);
+
+    if (!category) {
+      throw new NotFoundException(`Category not found: ${slug}`);
+    }
+
+    let added = 0;
+    let updated = 0;
+
+    for (const incoming of products) {
+      const existing = await this.productRepo.findOne({
+        where: { source_id: incoming.source_id, category: { id: category.id } },
+      });
+
+      if (existing) {
+        existing.title = incoming.title;
+        existing.author = incoming.author ?? existing.author;
+        existing.price = incoming.price;
+        existing.currency = incoming.currency;
+        existing.image_url = incoming.image_url;
+        existing.last_scraped_at = new Date();
+        await this.productRepo.save(existing);
+        updated++;
+      } else {
+        await this.productRepo.save(
+          this.productRepo.create({
+            source_id: incoming.source_id,
+            title: incoming.title,
+            author: incoming.author ?? null,
+            price: incoming.price,
+            currency: incoming.currency,
+            image_url: incoming.image_url,
+            source_url: incoming.source_url,
+            category,
+            last_scraped_at: new Date(),
+          }),
+        );
+        added++;
+      }
+    }
+
+    // Only ever advanced: a visitor reading page 1 after someone else reached page 3 must not
+    // send the collection back to the start.
+    const page = options.page ?? 1;
+    category.last_page_scraped = Math.max(category.last_page_scraped || 0, page);
+    category.product_count = await this.productRepo.count({
+      where: { category: { id: category.id } },
+    });
+    category.last_scraped_at = new Date();
+    await this.categoryRepo.save(category);
+
+    // The stored pages for this category are now different, so anything cached under them is
+    // stale. Dropping the whole category's entries is cheap and avoids serving a grid that is
+    // missing the books the visitor just watched arrive.
+    await this.invalidateCategoryCache(slug, options.navigationSlug);
+
+    this.logger.log(
+      `Imported ${products.length} browser-scraped products for ${slug}: ` +
+        `${added} new, ${updated} updated (page ${page})`,
+    );
+
+    return { added, updated, total: category.product_count, category };
+  }
+
+  /**
+   * Cache keys carry the page and page size, so there is no single key to drop. The sizes the
+   * clients actually ask for are few, and a miss only costs a query.
+   */
+  private async invalidateCategoryCache(slug: string, navigationSlug?: string): Promise<void> {
+    const limits = [12, 24, 40, 48, 100];
+    const keys: string[] = [];
+
+    for (let page = 1; page <= 5; page++) {
+      for (const limit of limits) {
+        keys.push(`category_${navigationSlug ?? '_'}_${slug}_p${page}_l${limit}`);
+      }
+    }
+
+    await Promise.all(keys.map((key) => this.cacheDel(key)));
   }
 
   /**

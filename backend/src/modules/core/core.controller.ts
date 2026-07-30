@@ -34,6 +34,7 @@ import {
   PaginatedProductsDto,
   ScrapeNavigationResponseDto,
   ScrapeProductResponseDto,
+  ImportScrapedProductsResponseDto,
 } from '../../common/dto/responses.dto';
 import {
   CategoryProductsQueryDto,
@@ -44,6 +45,8 @@ import {
   ListProductsQueryDto,
   LegacyScrapeType,
   ScrapeProductBodyDto,
+  ScrapeCategoryBodyDto,
+  ImportScrapedProductsDto,
 } from './dto';
 import { NumericIdParamDto, SlugParamDto, SourceIdParamDto } from '../../common/dto/params.dto';
 
@@ -209,8 +212,11 @@ export class CoreController {
   @Post('scrape/category/:slug')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Queue a listing scrape for a category',
-    description: 'Returns immediately with whatever is already stored; the scrape runs on the queue.',
+    summary: 'Scrape a category',
+    description:
+      'With `refresh: true`, fetches the next page from World of Books during the request and ' +
+      'returns it — the listing feed is JSON over HTTP, so this needs neither a browser nor a ' +
+      'worker. Without it, returns what is stored and queues a background job.',
   })
   @ApiParam({ name: 'slug', example: 'fantasy-fiction-books' })
   @ApiOkResponse({ type: CategoryProductsDto })
@@ -218,9 +224,48 @@ export class CoreController {
   async scrapeCategory(
     @Param() params: SlugParamDto,
     @Query() query: CategoryProductsQueryDto,
+    @Body() body: ScrapeCategoryBodyDto,
   ) {
     this.logger.log(`Manual category scrape triggered via API: ${params.slug}`);
-    return this.scrapeCategoryOrFail(params.slug, query);
+    return this.scrapeCategoryOrFail(params.slug, query, body.refresh ?? false);
+  }
+
+  @Post('categories/:slug/import')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Store products a visitor’s browser scraped',
+    description:
+      'World of Books rate-limits this API’s datacentre address while serving a visitor’s own ' +
+      'browser normally, so the browser reads the public collection feed and posts the result ' +
+      'here. Every row is validated against the shape and hosts a genuine feed entry has ' +
+      'before anything is stored.',
+  })
+  @ApiParam({ name: 'slug', example: 'author-books-by-agatha-christie' })
+  @ApiOkResponse({ type: ImportScrapedProductsResponseDto })
+  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'A row did not look like a feed entry' })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'No category with that slug' })
+  async importScrapedProducts(
+    @Param() params: SlugParamDto,
+    @Query() query: CategoryProductsQueryDto,
+    @Body() body: ImportScrapedProductsDto,
+  ) {
+    try {
+      const result = await this.scraperService.importScrapedProducts(params.slug, body.products, {
+        navigationSlug: query.navigation,
+        page: body.page,
+      });
+
+      return {
+        message: `Stored ${result.added} new and ${result.updated} updated products for ${params.slug}`,
+        added: result.added,
+        updated: result.updated,
+        total: result.total,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(`Import failed (${params.slug}): ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Failed to store products for: ${params.slug}`);
+    }
   }
 
   @Post('scrape/product/:sourceId')
@@ -337,12 +382,17 @@ export class CoreController {
 
   // ========== internals ==========
 
-  private async scrapeCategoryOrFail(slug: string, query: CategoryProductsQueryDto) {
+  private async scrapeCategoryOrFail(
+    slug: string,
+    query: CategoryProductsQueryDto,
+    force = false,
+  ) {
     try {
       return await this.scraperService.scrapeCategoryBySlug(slug, {
         page: query.page ?? 1,
         limit: query.limit ?? 24,
         navigationSlug: query.navigation,
+        force,
       });
     } catch (error) {
       // A deliberate 404 from the service must reach the client as a 404. Wrapping every
