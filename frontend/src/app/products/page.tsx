@@ -65,6 +65,8 @@ function ProductsPageContent() {
   } = useBrowserScrape()
 
   // State
+  // Category whose grid holds books this browser scraped, so stored rows do not overwrite them.
+  const [liveSlug, setLiveSlug] = useState<string | null>(null)
   const [sourceHasMore, setSourceHasMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
@@ -129,6 +131,10 @@ function ProductsPageContent() {
   useEffect(() => {
     if (isWsConnected && wsCategory === categorySlug && wsProducts.length > 0) {
       setDisplayProducts(wsProducts)
+    } else if (liveSlug === categorySlug) {
+      // Books this browser scraped for the category on screen, plus any pages added since.
+      // Stored rows must not replace them — a later `products` update would otherwise drop
+      // everything "load more" had appended.
     } else if (loadedSlugRef.current === categorySlug) {
       setDisplayProducts(products)
     } else {
@@ -136,7 +142,7 @@ function ProductsPageContent() {
       // the last category's books.
       setDisplayProducts([])
     }
-  }, [wsProducts, products, isWsConnected, wsCategory, categorySlug])
+  }, [wsProducts, products, isWsConnected, wsCategory, categorySlug, liveSlug])
 
   // Stop polling function
   const stopPolling = useCallback(() => {
@@ -220,34 +226,44 @@ function ProductsPageContent() {
     initializingSlugRef.current = categorySlug
     lastProductCountRef.current = 0
     loadedSlugRef.current = null
+    setLiveSlug(null)
     setDisplayProducts([])
     
     const initializeProducts = async () => {
       try {
-        // Paint whatever is already stored so the grid is not blank while the live
-        // browser session works through hover -> click -> scrape.
+        // Scrape first, and show nothing until it answers. Painting stored books immediately
+        // meant a category with a page already saved never scraped at all — the visitor saw a
+        // cached grid appear instantly and no scraping happen, which is the opposite of what
+        // this page is for. Storage is the fallback for when the storefront cannot be reached,
+        // not the thing shown while it can.
+        const live = await browserScrapeRef.current(categorySlug, {
+          categoryTitle: currentCategoryTitleRef.current,
+          navigationSlug: navigationSlug || undefined,
+        })
+
+        if (live.length > 0) {
+          setDisplayProducts(live)
+          setLiveSlug(categorySlug)
+          lastProductCountRef.current = live.length
+          setHasInitiallyLoaded(true)
+          initializingSlugRef.current = null
+
+          // Only for whether the collection has pages left, so "load more" knows. Deliberately
+          // not awaited: the books are already on screen and this must not hold them up.
+          navigationAPI
+            .getCategoryProducts(categorySlug, navigationSlug || undefined)
+            .then(result => setSourceHasMore(result.sourceHasMore ?? true))
+            .catch(() => setSourceHasMore(true))
+          return
+        }
+
+        // The scrape found nothing, or this browser was refused. Fall back to what is stored.
         const result = await navigationAPI.getCategoryProducts(categorySlug, navigationSlug || undefined)
         lastProductCountRef.current = result.products?.length || 0
         await loadProductsRef.current()
         loadedSlugRef.current = categorySlug
 
         setSourceHasMore(result.sourceHasMore ?? false)
-
-        // Nothing stored, so scrape it here. World of Books answers this API's datacentre
-        // address with 429 while serving a visitor's browser normally, which makes this the
-        // only path to the storefront in production — the fetch runs on their connection and
-        // the server is handed the result to keep.
-        if (lastProductCountRef.current === 0) {
-          const live = await browserScrapeRef.current(categorySlug, {
-            categoryTitle: currentCategoryTitleRef.current,
-            navigationSlug: navigationSlug || undefined,
-          })
-
-          if (live.length > 0) {
-            setDisplayProducts(live)
-            lastProductCountRef.current = live.length
-          }
-        }
 
         await new Promise(resolve => setTimeout(resolve, 100))
 
@@ -417,6 +433,8 @@ function ProductsPageContent() {
         const seen = new Set(prev.map((product: any) => product.source_id))
         return [...prev, ...more.filter(product => !seen.has(product.source_id))]
       })
+      // Claims the grid, so a later stored-products update cannot drop the appended pages.
+      setLiveSlug(categorySlug)
     }
   }
 
@@ -569,6 +587,7 @@ function ProductsPageContent() {
                         const seen = new Set(prev.map((p: any) => p.source_id))
                         return [...prev, ...newProducts.filter((p: any) => !seen.has(p.source_id))]
                       })
+                      if (categorySlug) setLiveSlug(categorySlug)
                     }}
                     disabled={isRefreshing || isLoading}
                   />

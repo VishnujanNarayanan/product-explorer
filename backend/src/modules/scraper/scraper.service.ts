@@ -81,6 +81,13 @@ export class ScraperService implements OnModuleInit {
   /** Category slug -> the time before which not to ask World of Books for it again. */
   private readonly scrapeBackoff = new Map<string, number>();
 
+  /**
+   * When the refusal was a 429 the block is on this address, not on the collection asked for —
+   * so every other category would otherwise queue up its own refused request, one per category
+   * a visitor opens. Held until this time, everything backs off together.
+   */
+  private blockedUntil = 0;
+
   /** Rejects if `work` has not settled in time, without leaving a timer behind. */
   private static async withTimeout<T>(ms: number, work: () => Promise<T>): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
@@ -476,9 +483,9 @@ export class ScraperService implements OnModuleInit {
     // regardless of how politely it asks. Without this, every page load re-attempted a scrape
     // that had just been turned away — three attempts in thirty seconds for one category, which
     // is how a temporary block earns itself a permanent one.
-    const blockedUntil = this.scrapeBackoff.get(category.slug);
-    if (blockedUntil && blockedUntil > Date.now()) {
-      const seconds = Math.ceil((blockedUntil - Date.now()) / 1000);
+    const until = Math.max(this.scrapeBackoff.get(category.slug) ?? 0, this.blockedUntil);
+    if (until > Date.now()) {
+      const seconds = Math.ceil((until - Date.now()) / 1000);
       this.logger.log(`Skipping scrape of ${category.slug}: backing off for another ${seconds}s`);
       return null;
     }
@@ -490,15 +497,20 @@ export class ScraperService implements OnModuleInit {
       );
 
       this.scrapeBackoff.delete(category.slug);
+      this.blockedUntil = 0;
       return await this.storeCategoryScrape(category, result, startPage);
     } catch (error) {
-      // Being turned away is not the same as failing. A 429 says "not from you, not yet", so
-      // wait considerably longer before asking again.
+      // Being turned away is not the same as failing. A 429 says "not from you, not yet" — and
+      // "you" is this address, so every collection waits, not just this one.
       const rejected = /429|blocked|rate/i.test(error.message ?? '');
       const backoffMs = rejected
         ? ScraperService.BLOCKED_BACKOFF_MS
         : ScraperService.FAILED_BACKOFF_MS;
+
       this.scrapeBackoff.set(category.slug, Date.now() + backoffMs);
+      if (rejected) {
+        this.blockedUntil = Date.now() + backoffMs;
+      }
 
       // A live scrape is a bonus on top of stored data, so its failure must not fail the read
       // that asked for it. The caller returns whatever the database already had.
