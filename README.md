@@ -5,19 +5,21 @@
   headings, categories, books and their details, gathered live from the site itself.
 </p>
 
-<div align="center">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.2-3178C6?logo=typescript&logoColor=white">
-  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white">
-  <img alt="NestJS" src="https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white">
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white">
-  <img alt="Redis" src="https://img.shields.io/badge/Redis-BullMQ-DC382D?logo=redis&logoColor=white">
-  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-Crawlee-2EAD33?logo=playwright&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-234_passing-success">
+<p align="center">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.2-3178C6?logo=typescript&logoColor=white"/>
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white"/>
+  <img alt="NestJS" src="https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white"/>
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white"/>
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-BullMQ-DC382D?logo=redis&logoColor=white"/>
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-Crawlee-2EAD33?logo=playwright&logoColor=white"/>
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white"/>
+  <img alt="CI" src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white"/>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-234_passing-3FB950?logo=jest&logoColor=white"/>
   <br>
   <a href="https://github.com/VishnujanNarayanan"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-VishnujanNarayanan-181717?logo=github&logoColor=white&style=for-the-badge"/></a>
   <a href="https://www.linkedin.com/in/vishnujan-narayanan"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Vishnujan_Narayanan-0A66C2?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0yMC40NDcgMjAuNDUyaC0zLjU1NHYtNS41NjljMC0xLjMyOC0uMDI3LTMuMDM3LTEuODUyLTMuMDM3LTEuODUzIDAtMi4xMzYgMS40NDUtMi4xMzYgMi45Mzl2NS42NjdIOS4zNTFWOWgzLjQxNHYxLjU2MWguMDQ2Yy40NzctLjkgMS42MzctMS44NSAzLjM3LTEuODUgMy42MDEgMCA0LjI2NyAyLjM3IDQuMjY3IDUuNDU1djYuMjg2ek01LjMzNyA3LjQzM2MtMS4xNDQgMC0yLjA2My0uOTI2LTIuMDYzLTIuMDY1IDAtMS4xMzguOTItMi4wNjMgMi4wNjMtMi4wNjMgMS4xNCAwIDIuMDY0LjkyNSAyLjA2NCAyLjA2MyAwIDEuMTM5LS45MjUgMi4wNjUtMi4wNjQgMi4wNjV6bTEuNzgyIDEzLjAxOUgzLjU1NVY5aDMuNTY0djExLjQ1MnpNMjIuMjI1IDBIMS43NzFDLjc5MiAwIDAgLjc3NCAwIDEuNzI5djIwLjU0MkMwIDIzLjIyNy43OTIgMjQgMS43NzEgMjRoMjAuNDUxQzIzLjIgMjQgMjQgMjMuMjI3IDI0IDIyLjI3MVYxLjcyOUMyNCAuNzc0IDIzLjIgMCAyMi4yMjIgMGguMDAzeiIvPjwvc3ZnPg%3D%3D&logoColor=white&style=for-the-badge"/></a>
   <a href="https://substack.com/@vishnujannarayanan"><img alt="Substack" src="https://img.shields.io/badge/Substack-@vishnujannarayanan-FF6719?logo=substack&logoColor=white&style=for-the-badge"/></a>
-</div>
+</p>
 
 <p align="center">
   📖 <a href="#overview">Overview</a> ·
@@ -82,15 +84,27 @@ browser**, not by the server. The site allows this — the feed is published for
 keeps the hosted app responsive no matter how many people are browsing. The results are sent to the
 API, which checks each one before storing it.
 
+```mermaid
+flowchart TB
+    U(("You")) -->|click a category| FE["Next.js front end"]
+    FE -->|fetch listing directly, ~1s| WOB[("World of Books<br/>public JSON feed")]
+    WOB --> FE
+    FE -->|POST scraped items| API["NestJS API"]
+    API -->|validate| PG[("PostgreSQL")]
+    API --> RD[("Redis<br/>cache + BullMQ queue")]
+
+    API -->|menus &amp; product detail| PWQ["Playwright + Crawlee<br/>background jobs"]
+    PWQ --> WOB
+    PWQ --> PG
+
+    U2(("Next visitor")) --> FE2["Next.js"] --> API
+    API -->|cache hit| RD
+    RD -->|instant| FE2
 ```
-you click a category
-     ↓
-your browser fetches the listing from World of Books      ~1s
-     ↓
-books appear, and are sent to the API to be stored
-     ↓
-anyone opening that category later gets it instantly
-```
+
+Listings are fetched by **your browser**; menus and product detail pages are scraped
+**server-side** through a queued Playwright job. Anything the browser sends up is validated by the
+API before it is stored, so the client is never trusted as a data source.
 
 ## Run it locally
 
@@ -178,6 +192,12 @@ docs/             OpenAPI snapshot
 - World of Books publishes no ratings or reviews, so the app shows none rather than inventing them.
 - The hosted demo sleeps when idle and has limited memory, so the browser-driven scraper only runs
   when you run the project yourself.
+
+## License
+
+No licence file is present; all rights reserved by the author. World of Books content and
+branding belong to World of Books Ltd — this project reads their public catalogue and links back
+to it, and redistributes nothing.
 
 ## Author
 
