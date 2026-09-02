@@ -132,6 +132,32 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  python-tooling:
+    name: Python tooling — Postman collection is in step with OpenAPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: pip install -r scripts/requirements.txt
+
+      # The collection is derived from docs/openapi.json, so it can silently drift the
+      # moment someone adds an endpoint. A stale collection is worse than none, because
+      # people trust it — so this fails the build rather than letting it rot.
+      - name: Postman collection is up to date
+        run: python scripts/generate_postman.py --check
+
+      # No API is running in this job, so the pytest suite skips every test by design.
+      # Collecting it still catches an import error or a broken fixture, which is the
+      # failure that would otherwise only appear when someone runs it against a deploy.
+      - name: Collect the pytest suite
+        run: python -m pytest scripts/tests --collect-only -q
+
   docker:
     name: Docker images build
     runs-on: ubuntu-latest
