@@ -1,0 +1,4 @@
+# Tooling that talks to the running API. Deliberately tiny: the two libraries the
+# SDET world actually uses for HTTP tests, and nothing else.
+requests>=2.31
+pytest>=8.0

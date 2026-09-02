@@ -31,6 +31,13 @@ page-screenshot.png
 navigation-results.json
 new-navigation-results.json
 
+# ---------- Python tooling (scripts/) ----------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
 # ---------- Logs ----------
 logs/
 *.log
